@@ -1,0 +1,13 @@
+services:
+  redis-debetter:
+    image: redis:8.0.3
+    container_name: redis-debetter
+    command: [redis-server, "--requirepass", "893fe9af-60e2-4ab4-952d-4a767f6670c0"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  redis-data:
