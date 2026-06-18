@@ -8,6 +8,7 @@ import com.heliozz10.debetter.content.tournament.match.TeamMatchupHistory;
 import com.heliozz10.debetter.content.tournament.round.Round;
 import com.heliozz10.debetter.content.tournament.team.Team;
 import com.heliozz10.debetter.dto.tournament.round.in.RoundUpdateDto;
+import com.heliozz10.debetter.mapper.tournament.round.RoundMapper;
 import com.heliozz10.debetter.repository.tournament.match.DebaterMatchupHistoryRepository;
 import com.heliozz10.debetter.repository.tournament.match.MatchRepository;
 import com.heliozz10.debetter.repository.tournament.match.TeamMatchupHistoryRepository;
@@ -26,6 +27,7 @@ import java.util.function.Consumer;
 @Service
 public class RoundService {
     private final RoundRepository roundRepository;
+    private final RoundMapper roundMapper;
 
     private final MatchRepository matchRepository;
 
@@ -33,26 +35,22 @@ public class RoundService {
     private final DebaterMatchupHistoryRepository debaterMatchupHistoryRepository;
 
     @Transactional(readOnly = true)
-    public List<Round> getRoundsByRoundGroupId(Long roundGroupId) {
-        return roundRepository.findByRoundGroupId(roundGroupId);
+    public List<Round> getRoundsByTournamentIdAndRoundGroupId(Long tournamentId, Long roundGroupId) {
+        return roundRepository.findByRoundGroup_Tournament_IdAndRoundGroup_Id(tournamentId, roundGroupId);
     }
 
     @Transactional(readOnly = true)
-    private Round getRoundById(Long id) {
-        return roundRepository.findById(id)
+    public Round getRoundByTournamentIdAndRoundGroupIdAndId(Long tournamentId, Long roundGroupId, Long id) {
+        return roundRepository.findByRoundGroup_Tournament_IdAndRoundGroup_IdAndId(tournamentId, roundGroupId, id)
                 .orElseThrow(() -> new EntityNotFoundException("Round not found"));
     }
 
     @Transactional
     public void updateRound(RoundUpdateDto roundUpdateDto, Long tournamentId, Long roundId) {
-        Round round = getRoundById(roundId);
+        Round round = roundRepository.findByRoundGroup_Tournament_IdAndId(tournamentId, roundId)
+                .orElseThrow(() -> new EntityNotFoundException("Round not found"));
 
-        if(!Objects.equals(round.getRoundGroup().getTournament().getId(), tournamentId)) {
-            throw new EntityNotFoundException("Round not found");
-        }
-
-        round.setName(roundUpdateDto.name());
-        round.setMatchesArePublic(roundUpdateDto.matchesArePublic());
+        roundMapper.updateRound(roundUpdateDto, round);
 
         if(roundUpdateDto.customFormat() != null) {
             if(!round.getMatches().isEmpty()) {
@@ -63,13 +61,56 @@ public class RoundService {
         }
     }
 
+    @Transactional
     public void generateMatchesAndAssignJudges(Round round) {
         generateMatches(round);
         assignJudges(round);
     }
 
+    @Transactional
+    public void regenerateMatches(Long tournamentId, Long roundGroupId, Long roundId) {
+        Round round = roundRepository.findWithPairingStateByTournamentAndRoundGroupAndId(tournamentId, roundGroupId, roundId)
+                .orElseThrow(() -> new EntityNotFoundException("Round not found"));
+
+        clearMatches(round);
+        generateMatchesAndAssignJudges(round);
+    }
+
+    @Transactional
+    public void publishMatches(Long tournamentId, Long roundGroupId, Long roundId) {
+        Round round = roundRepository.findByRoundGroup_Tournament_IdAndRoundGroup_IdAndId(tournamentId, roundGroupId, roundId)
+                .orElseThrow(() -> new EntityNotFoundException("Round not found"));
+
+        if(round.getMatches() == null || round.getMatches().isEmpty()) {
+            throw new IllegalStateException("Cannot publish pairings before matches are generated");
+        }
+
+        round.setMatchesArePublic(true);
+    }
+
+    @Transactional
+    public void clearMatches(Long tournamentId, Long roundGroupId, Long roundId) {
+        Round round = roundRepository.findByRoundGroup_Tournament_IdAndRoundGroup_IdAndId(tournamentId, roundGroupId, roundId)
+                .orElseThrow(() -> new EntityNotFoundException("Round not found"));
+
+        clearMatches(round);
+    }
+
+    private void clearMatches(Round round) {
+        if(round.getMatches() == null) {
+            round.setMatches(new ArrayList<>());
+        }
+
+        if(round.getMatches().stream().anyMatch(match -> Boolean.TRUE.equals(match.getCompleted()))) {
+            throw new IllegalStateException("Cannot clear matches after results are submitted");
+        }
+
+        round.getMatches().clear();
+        round.setMatchesArePublic(false);
+        roundRepository.flush();
+    }
+
     //TODO: automatically assign judges. Done
-    // -------- CODE BELOW IS AI GENERATED AND NOT PROPERLY REVISED YET --------
     /**
      * Generates matches for a round. This method works with teams already set for the round. Does not check if teams are eligible.
      * So this method should only be called when teams are already set for the round and are eligible.
@@ -248,7 +289,7 @@ public class RoundService {
         match.setDebater2(g.get(1));
     }
 
-    /** -------- Helper utils -------- */
+    /** helper stuff -------- */
     private static long key(long a, long b) {
         return (Math.min(a, b) << 32) | Math.max(a, b);
     }
@@ -285,8 +326,6 @@ public class RoundService {
         else throw new IllegalArgumentException("Unsupported history type");
     }
 
-    // -------- END OF AI GENERATED CODE --------
-
     @Transactional
     public void assignJudges(Round round) {
         roundRepository.assignJudgesForRound(round.getId());
@@ -301,10 +340,9 @@ public class RoundService {
     }
 
     public void deleteRound(Long tournamentId, Long roundId) {
-        Round round = getRoundById(roundId);
-        if(!Objects.equals(round.getRoundGroup().getTournament().getId(), tournamentId)) {
-            throw new EntityNotFoundException("Round not found");
-        }
+        Round round = roundRepository.findByRoundGroup_Tournament_IdAndId(tournamentId, roundId)
+                .orElseThrow(() -> new EntityNotFoundException("Round not found"));
+
         roundRepository.deleteById(roundId);
     }
 }

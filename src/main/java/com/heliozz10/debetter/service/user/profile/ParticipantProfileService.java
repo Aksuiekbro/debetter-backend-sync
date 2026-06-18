@@ -12,6 +12,7 @@ import com.heliozz10.debetter.repository.user.profile.ParticipantProfileReposito
 import com.heliozz10.debetter.repository.user.profile.institution.InstitutionRepository;
 import com.heliozz10.debetter.service.CommonService;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.search.engine.search.query.SearchResult;
 import org.hibernate.search.mapper.orm.Search;
@@ -34,6 +35,12 @@ public class ParticipantProfileService implements ProfileService {
     private final InstitutionRepository institutionRepository;
 
     private final CommonService commonService;
+
+    @Override
+    public ParticipantProfile getProfileById(Long id) {
+        return participantProfileRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Participant profile not found"));
+    }
 
     @Transactional(readOnly = true)
     public Page<City> getCities(String searchName, Pageable pageable) {
@@ -81,7 +88,9 @@ public class ParticipantProfileService implements ProfileService {
         User user = entityManager.getReference(User.class, userId);
         profile.setUser(user);
 
-        return participantProfileRepository.save(profile);
+        ParticipantProfile savedProfile = participantProfileRepository.save(profile);
+        user.setProfile(savedProfile);
+        return savedProfile;
     }
 
     @Transactional
@@ -91,12 +100,18 @@ public class ParticipantProfileService implements ProfileService {
         User user = entityManager.getReference(User.class, userId);
         profile.setUser(user);
 
-        City city = commonService.findOrCreateEntity(cityDto.name(), City.class, entityManager);
-        profile.setCity(city);
+        if(cityDto != null && cityDto.name() != null) {
+            City city = commonService.findOrCreateEntity(cityDto.name(), City.class, entityManager);
+            profile.setCity(city);
+        }
 
-        Institution institution = commonService.findOrCreateEntity(institutionDto.name(), Institution.class, entityManager);
-        profile.setInstitution(institution);
+        if(institutionDto != null && institutionDto.name() != null) {
+            Institution institution = commonService.findOrCreateEntity(institutionDto.name(), Institution.class, entityManager);
+            profile.setInstitution(institution);
+        }
 
-        return participantProfileRepository.save(profile);
+        ParticipantProfile savedProfile = participantProfileRepository.save(profile);
+        user.setProfile(savedProfile);
+        return savedProfile;
     }
 }

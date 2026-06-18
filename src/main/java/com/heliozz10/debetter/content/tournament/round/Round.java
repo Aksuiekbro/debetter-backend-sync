@@ -7,6 +7,8 @@ import com.heliozz10.debetter.content.tournament.match.Match;
 import com.heliozz10.debetter.content.tournament.team.Team;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
 
 import java.util.List;
 
@@ -14,20 +16,20 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@NamedEntityGraph(
-    name = "Round.withTournament",
-    attributeNodes = {
-        @NamedAttributeNode(value = "roundGroup", subgraph = "roundGroupWithTournament")
-    },
-    subgraphs = {
-        @NamedSubgraph(
-            name = "roundGroupWithTournament",
-            attributeNodes = {
-                @NamedAttributeNode(value = "tournament")
-            }
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "Round.forView",
+                attributeNodes = {
+                        @NamedAttributeNode("matches")
+                }
+        ),
+        @NamedEntityGraph(
+                name = "Round.withTeams",
+                attributeNodes = {
+                        @NamedAttributeNode("teams")
+                }
         )
-    }
-)
+})
 @Entity
 @Table(name = "round", indexes = {
         @Index(name = "round_round_group_id_fkey", columnList = "round_group_id")

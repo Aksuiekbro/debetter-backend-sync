@@ -5,6 +5,8 @@ import com.heliozz10.debetter.content.tournament.announcement.Announcement;
 import com.heliozz10.debetter.content.util.request.OrganizerInvitation;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
 
 import java.util.List;
 
@@ -12,6 +14,20 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "OrganizerProfile.forView",
+                attributeNodes = {
+                        @NamedAttributeNode("organizedTournaments")
+                }
+        ),
+        @NamedEntityGraph(
+                name = "OrganizerProfile.withAnnouncements",
+                attributeNodes = {
+                        @NamedAttributeNode("announcements")
+                }
+        )
+})
 @Entity
 @Table(name = "organizer_profile")
 public class OrganizerProfile extends Profile {

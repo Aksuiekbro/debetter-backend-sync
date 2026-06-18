@@ -17,7 +17,7 @@ public class SocialProfile {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private SocialPlatform platform;
+    private SocialPlatform socialPlatform;
 
     /**
      * doesnt need @ for TikTok, Instagram etc handles

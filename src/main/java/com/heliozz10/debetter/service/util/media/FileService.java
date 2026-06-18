@@ -19,110 +19,97 @@ import java.util.*;
 @RequiredArgsConstructor
 @Service
 public class FileService {
-    private final Environment environment;
-
     private final UrlRepository urlRepository;
-
     private final FileUploadProperties fileUploadProperties;
 
-    //TODO: dont forget about security for files. Files should be retrieved after resolving the url entity. flow:
-    // url (/uploads/*) -> security -> url entity -> file
     @Transactional
     public Url uploadImage(MultipartFile file, String path, String fileName) {
         validateImage(file);
-
-        return uploadFile(file, path, fileName);
+        return saveFile(file, "images/" + path, fileName);
     }
 
     @Transactional
     public List<Url> uploadImages(Map<String, MultipartFile> files, String path) {
-        for(Map.Entry<String, MultipartFile> entry : files.entrySet()) {
-            validateImage(entry.getValue());
+        for (MultipartFile file : files.values()) {
+            validateImage(file);
         }
-
-        return uploadFiles(files, path);
+        return saveFiles(files, "images/" + path);
     }
 
-    private void validateImage(MultipartFile file) {
-        if (file.isEmpty()) {
-            throw new IllegalArgumentException("File '" + file.getOriginalFilename() + "' is empty");
-        }
-
-        if (file.getSize() > fileUploadProperties.getMaxFileSize()) {
-            throw new IllegalArgumentException("File '" + file.getOriginalFilename() + "' exceeds maximum allowed size of " +
-                    fileUploadProperties.getMaxFileSize() / 1024 / 1024 + " MB");
-        }
-
-        String fileExtension = getFileExtension(file.getOriginalFilename()).toLowerCase();
-        if(!List.of("jpg", "jpeg", "png").contains(fileExtension)) {
-            throw new IllegalArgumentException("Invalid file extension for file '" + file.getOriginalFilename() + "': " + fileExtension);
-        }
-
-        try {
-            String mimeType = Files.probeContentType(Paths.get(file.getOriginalFilename()));
-            if (mimeType == null || !mimeType.startsWith("image/")) {
-                throw new IllegalArgumentException("Invalid MIME type for file '" + file.getOriginalFilename() + "': " + mimeType);
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to determine file type for file '" + file.getOriginalFilename() + "'", e);
-        }
-    }
-
-    /**
-     * @param file
-     * @param path must not have slashes at the beginning or end
-     * @param fileName must be unique and without extension
-     * @return
-     */
+    @Transactional
     public Url uploadFile(MultipartFile file, String path, String fileName) {
-        uploadFileRaw(file, path, fileName);
-        Url url = new Url();
-        url.setUrl(fileUploadProperties.getPublicUrlPrefix() + path + "/" + fileName);
-        return urlRepository.save(url);
+        return saveFile(file, path, fileName);
     }
 
-    /**
-     * uploads multiple files
-     * @param files map of file name to file
-     * @param path path to store files
-     * @return list of urls
-     */
     @Transactional
     public List<Url> uploadFiles(Map<String, MultipartFile> files, String path) {
-        List<Url> urls = new ArrayList<>();
-        for(Map.Entry<String, MultipartFile> entry : files.entrySet()) {
-            uploadFileRaw(entry.getValue(), path, entry.getKey());
-            Url url = new Url();
-            url.setUrl(fileUploadProperties.getPublicUrlPrefix() + path + "/" + entry.getKey());
-            urls.add(url);
-        }
-        urlRepository.saveAll(urls);
-        return urls;
+        return saveFiles(files, path);
     }
 
-    /**
-     * make sure to use this method with file service generated urls
-     * @param url
-     */
+    @Transactional
     public void deleteFile(Url url) {
+        if (url == null) {
+            return;
+        }
+
         String storagePath = getStoragePathFromUrl(url);
         try {
             Files.deleteIfExists(Paths.get(storagePath));
+            urlRepository.delete(url);
         } catch (IOException e) {
             throw new RuntimeException("Failed to delete file", e);
         }
     }
 
+    @Transactional
     public void deleteFiles(Collection<Url> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return;
+        }
+
         for (Url url : urls) {
             deleteFile(url);
         }
     }
 
+    public Path resolveFilePathByUrl(String url) {
+        Url entity = urlRepository.findByUrl(url)
+                .orElseThrow(() -> new IllegalArgumentException("File not found for URL: " + url));
+        return Paths.get(getStoragePathFromUrl(entity));
+    }
+
+    //PRIVATE HELPERS
+
+    private Url saveFile(MultipartFile file, String path, String fileName) {
+        uploadFileRaw(file, path, fileName);
+
+        Url url = new Url();
+        url.setUrl(buildPublicUrl(path, fileName, file.getOriginalFilename()));
+
+        return urlRepository.save(url);
+    }
+
+    private List<Url> saveFiles(Map<String, MultipartFile> files, String path) {
+        List<Url> urls = new ArrayList<>();
+
+        for (Map.Entry<String, MultipartFile> entry : files.entrySet()) {
+            MultipartFile file = entry.getValue();
+            String fileName = entry.getKey();
+
+            uploadFileRaw(file, path, fileName);
+
+            Url url = new Url();
+            url.setUrl(buildPublicUrl(path, fileName, file.getOriginalFilename()));
+            urls.add(url);
+        }
+
+        return urlRepository.saveAll(urls);
+    }
+
     private void uploadFileRaw(MultipartFile file, String path, String fileName) {
         try {
             Path uploadDir = Paths.get(fileUploadProperties.getStoragePath(), path);
-            if(!Files.exists(uploadDir)) {
+            if (!Files.exists(uploadDir)) {
                 Files.createDirectories(uploadDir);
             }
 
@@ -133,7 +120,29 @@ public class FileService {
             Path destination = uploadDir.resolve(uniqueFileName);
             Files.copy(file.getInputStream(), destination, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to save image", e);
+            throw new RuntimeException("Failed to save file", e);
+        }
+    }
+
+    private void validateImage(MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("File '" + file.getOriginalFilename() + "' is empty");
+        }
+
+        if (file.getSize() > fileUploadProperties.getMaxFileSize()) {
+            throw new IllegalArgumentException("File '" + file.getOriginalFilename()
+                    + "' exceeds maximum allowed size of "
+                    + fileUploadProperties.getMaxFileSize() / 1024 / 1024 + " MB");
+        }
+
+        String fileExtension = getFileExtension(file.getOriginalFilename()).toLowerCase();
+        if (!List.of("jpg", "jpeg", "png").contains(fileExtension)) {
+            throw new IllegalArgumentException("Invalid file extension for file '" + file.getOriginalFilename() + "'");
+        }
+
+        String mimeType = file.getContentType();
+        if (mimeType == null || !mimeType.startsWith("image/")) {
+            throw new IllegalArgumentException("Invalid MIME type for file '" + file.getOriginalFilename() + "'");
         }
     }
 
@@ -149,5 +158,10 @@ public class FileService {
         String publicUrlPrefix = fileUploadProperties.getPublicUrlPrefix();
         String relativePath = urlPath.substring(publicUrlPrefix.length());
         return Paths.get(fileUploadProperties.getStoragePath(), relativePath).toString();
+    }
+
+    private String buildPublicUrl(String path, String fileName, String originalFileName) {
+        String extension = getFileExtension(originalFileName);
+        return fileUploadProperties.getPublicUrlPrefix() + path + "/" + fileName + "." + extension;
     }
 }

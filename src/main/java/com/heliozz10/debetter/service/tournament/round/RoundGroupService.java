@@ -7,10 +7,10 @@ import com.heliozz10.debetter.content.tournament.round.Round;
 import com.heliozz10.debetter.content.tournament.round.RoundGroup;
 import com.heliozz10.debetter.content.tournament.round.RoundGroupType;
 import com.heliozz10.debetter.content.tournament.team.Team;
+import com.heliozz10.debetter.repository.tournament.TournamentParticipantRepository;
 import com.heliozz10.debetter.repository.tournament.round.RoundGroupRepository;
 import com.heliozz10.debetter.repository.tournament.round.RoundRepository;
 import com.heliozz10.debetter.repository.tournament.team.TeamRepository;
-import com.heliozz10.debetter.service.tournament.MatchService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,8 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
-import java.util.PriorityQueue;
 
 @RequiredArgsConstructor
 @Service
@@ -31,6 +29,7 @@ public class RoundGroupService {
     private final RoundRepository roundRepository;
 
     private final TeamRepository teamRepository;
+    private final TournamentParticipantRepository tournamentParticipantRepository;
 
     @Transactional(readOnly = true)
     public List<RoundGroup> getRoundGroupsByTournamentId(Long tournamentId) {
@@ -54,20 +53,16 @@ public class RoundGroupService {
      */
     @Transactional
     public void proceedToNextRound(Long tournamentId, Long roundGroupId) {
-        RoundGroup roundGroup = roundGroupRepository.findById(roundGroupId)
+        RoundGroup roundGroup = roundGroupRepository.findFullByTournamentIdAndId(tournamentId, roundGroupId)
                 .orElseThrow(() -> new EntityNotFoundException("Round group not found"));
 
         Tournament tournament = roundGroup.getTournament();
-
-        if(!Objects.equals(tournament.getId(), tournamentId)) {
-            throw new EntityNotFoundException("Round group not found");
-        }
 
         if(!tournament.getStarted()) {
             throw new IllegalStateException("Tournament is not started");
         }
 
-        Round currentRound = roundRepository.findByRoundGroup_IdAndRoundNumber(roundGroupId, roundGroup.getCurrentRoundNumber())
+        Round currentRound = roundRepository.findWithTeamsByRoundGroup_IdAndRoundNumber(roundGroupId, roundGroup.getCurrentRoundNumber())
                 .orElseThrow(() -> new EntityNotFoundException("Current round not found"));
 
         if(!roundRepository.areAllMatchesCompleted(currentRound)) {
@@ -109,6 +104,7 @@ public class RoundGroupService {
                 .orElseThrow(() -> new EntityNotFoundException("Next round not found"));
 
         if(roundGroup.getType() == RoundGroupType.TEAM_ELIMINATION) {
+
             List<Team> topTeams = currentRound.getTeams().stream()
                     .sorted(Comparator.comparing(Team::getPreliminaryScore).reversed())
                     .limit(numberOfEntrants)
@@ -118,6 +114,7 @@ public class RoundGroupService {
         }
 
         if(roundGroup.getType() == RoundGroupType.SOLO_ELIMINATION) {
+            List<TournamentParticipant> debaters = roundRepository.findDebatersByRoundId(currentRound.getId());
             List<TournamentParticipant> topDebaters = currentRound.getDebaters().stream()
                     .sorted(Comparator.comparing(TournamentParticipant::getSpeakerScore).reversed())
                     .limit(numberOfEntrants)

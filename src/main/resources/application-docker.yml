@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: debetter
+  data:
+    web:
+      pageable:
+        max-page-size: 50
+    redis:
+      host: ${SPRING_REDIS_HOST:redis}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:debetter_redis_password}
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://db:5432/debetter}
+    username: ${SPRING_DATASOURCE_USERNAME:debetter_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:debetter_dev_password}
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+        search:
+          backend:
+            type: lucene
+            directory:
+              type: local-filesystem
+              root: /var/data/lucene-indexes/debetter-dev
+            analysis:
+              configurer: class:com.heliozz10.debetter.config.LuceneAnalysisConfig
+  mvc:
+    servlet:
+      path: /api
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yml
+security:
+  remember-me:
+    key: ${SECURITY_REMEMBER_ME_KEY:dev-remember-me-key-change-me}
+
+app:
+  file-upload:
+    storage-path: /var/www/debetter/uploads
+    public-url-prefix: /uploads/
+    max-file-size: 5242880 # 5MB in bytes

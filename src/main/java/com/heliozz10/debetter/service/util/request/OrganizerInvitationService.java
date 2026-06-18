@@ -3,6 +3,10 @@ package com.heliozz10.debetter.service.util.request;
 import com.heliozz10.debetter.content.tournament.Tournament;
 import com.heliozz10.debetter.content.user.profile.OrganizerProfile;
 import com.heliozz10.debetter.content.util.request.OrganizerInvitation;
+import com.heliozz10.debetter.dto.util.request.out.OrganizerInvitationView;
+import com.heliozz10.debetter.mapper.user.UserMapper;
+import com.heliozz10.debetter.mapper.util.request.OrganizerInvitationMapper;
+import com.heliozz10.debetter.repository.user.profile.OrganizerProfileRepository;
 import com.heliozz10.debetter.repository.util.request.OrganizerInvitationRepository;
 import com.heliozz10.debetter.service.tournament.TournamentService;
 import jakarta.persistence.EntityManager;
@@ -21,8 +25,12 @@ public class OrganizerInvitationService {
     private final EntityManager entityManager;
 
     private final OrganizerInvitationRepository organizerInvitationRepository;
+    private final OrganizerInvitationMapper organizerInvitationMapper;
 
     private final TournamentService tournamentService;
+
+    private final UserMapper userMapper;
+    private final OrganizerProfileRepository organizerProfileRepository;
 
     @Transactional(readOnly = true)
     public Page<OrganizerInvitation> getInvitationsByInviteeId(Long inviteeId, Pageable pageable) {
@@ -40,8 +48,8 @@ public class OrganizerInvitationService {
     }
 
     @Transactional
-    public OrganizerInvitation createInvitation(Long inviterId, Long inviteeId, Long tournamentId) {
-        long existingInvitationCount = organizerInvitationRepository.countExistingInvitation(inviterId, inviteeId, tournamentId);
+    public OrganizerInvitation createInvitation(Long inviterId, String inviteeUsername, Long tournamentId) {
+        long existingInvitationCount = organizerInvitationRepository.countExistingInvitations(inviterId, inviteeUsername, tournamentId);
 
         if (existingInvitationCount > 0) {
             throw new IllegalArgumentException("Invitation already exists");
@@ -50,7 +58,8 @@ public class OrganizerInvitationService {
         OrganizerInvitation invitation = new OrganizerInvitation();
 
         OrganizerProfile inviter = entityManager.getReference(OrganizerProfile.class, inviterId);
-        OrganizerProfile invitee = entityManager.getReference(OrganizerProfile.class, inviteeId);
+        OrganizerProfile invitee = organizerProfileRepository.findByUser_Username(inviteeUsername)
+                .orElseThrow(() -> new EntityNotFoundException("Invitee not found"));
         Tournament tournament = entityManager.getReference(Tournament.class, tournamentId);
 
         invitation.setInviter(inviter);
@@ -64,8 +73,8 @@ public class OrganizerInvitationService {
     }
 
     @Transactional
-    public void acceptInvitation(Long invitationId) {
-        OrganizerInvitation invitation = organizerInvitationRepository.findById(invitationId)
+    public void acceptInvitation(Long invitationId, Long inviteeId) {
+        OrganizerInvitation invitation = organizerInvitationRepository.findByInviteeIdAndId(invitationId, inviteeId)
                 .orElseThrow(() -> new EntityNotFoundException("Invitation not found"));
 
         invitation.setAccepted(true);
@@ -74,12 +83,22 @@ public class OrganizerInvitationService {
     }
 
     @Transactional
-    public void rejectInvitation(Long invitationId) {
-        deleteInvitation(invitationId);
+    public void rejectInvitation(Long invitationId, Long inviteeId) {
+        deleteInvitation(invitationId, inviteeId);
     }
 
     @Transactional
-    public void deleteInvitation(Long invitationId) {
+    public void deleteInvitation(Long invitationId, Long inviteeId) {
+        OrganizerInvitation invitation = organizerInvitationRepository.findRawByInviteeIdAndId(inviteeId, invitationId)
+                .orElseThrow(() -> new EntityNotFoundException("Invitation not found"));
+
         organizerInvitationRepository.deleteById(invitationId);
+    }
+
+    public OrganizerInvitationView toOrganizerInvitationView(OrganizerInvitation invitation) {
+        OrganizerInvitationView view = organizerInvitationMapper.toOrganizerInvitationView(invitation);
+        view.setInviter(userMapper.toSimpleUserView(invitation.getInviter().getUser()));
+        view.setInvitee(userMapper.toSimpleUserView(invitation.getInvitee().getUser()));
+        return view;
     }
 }

@@ -7,6 +7,7 @@ import lombok.*;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.IndexedEmbedded;
 
+import java.util.ArrayList;
 import java.util.List;
 
 
@@ -17,6 +18,29 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "Team.full",
+                attributeNodes = {
+                        @NamedAttributeNode("tournament"),
+                        @NamedAttributeNode(value = "members", subgraph = "membersSubgraph")
+                },
+                subgraphs = {
+                        @NamedSubgraph(
+                                name = "membersSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode(value = "participantProfile", subgraph = "profileSubgraph")
+                                }
+                        ),
+                        @NamedSubgraph(
+                                name = "profileSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode("user")
+                                }
+                        )
+                }
+        )
+})
 @Entity
 @Table(name = "team")
 public class Team {
@@ -24,19 +48,19 @@ public class Team {
     @GeneratedValue
     private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 120)
     private String name;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tournament_id", nullable = false)
     private Tournament tournament;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "club_id")
     private Club club;
 
     @OneToMany(mappedBy = "team", fetch = FetchType.LAZY)
-    private List<TournamentParticipant> members;
+    private List<TournamentParticipant> members = new ArrayList<>();
 
     @Column
     private Integer preliminaryScore;

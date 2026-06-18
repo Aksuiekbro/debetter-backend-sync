@@ -11,5 +11,4 @@ public class SimpleTeamView {
     private Long id;
     private String name;
     private Club club;
-    private List<SimpleTournamentParticipantView> members;
 }

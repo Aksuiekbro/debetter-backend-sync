@@ -1,10 +1,12 @@
 package com.heliozz10.debetter.dto.tournament.announcement.in;
 
+import com.heliozz10.debetter.validation.OnCreate;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.springframework.web.multipart.MultipartFile;
 
 public record AnnouncementFormDto(
-    String title,
-    String content,
-    MultipartFile image
+        @NotNull(groups = {OnCreate.class}) @Size(min = 1, max = 120) String title,
+        @NotNull(groups = {OnCreate.class}) @Size(min = 1, max = 5000) String content
 ) {
 }

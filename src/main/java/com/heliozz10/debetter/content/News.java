@@ -5,9 +5,8 @@ import com.heliozz10.debetter.content.user.profile.OrganizerProfile;
 import com.heliozz10.debetter.content.util.media.Url;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
-import org.hibernate.search.mapper.pojo.mapping.definition.annotation.Indexed;
-import org.hibernate.search.mapper.pojo.mapping.definition.annotation.IndexedEmbedded;
+import org.hibernate.search.mapper.pojo.automaticindexing.ReindexOnUpdate;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,6 +16,22 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Indexed
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "News.forView",
+                attributeNodes = {
+                        @NamedAttributeNode(value = "author", subgraph = "authorSubgraph"),
+                },
+                subgraphs = {
+                        @NamedSubgraph(
+                                name = "authorSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode("user")
+                                }
+                        )
+                }
+        )
+})
 @Entity
 @Table(name = "news")
 public class News {
@@ -28,23 +43,24 @@ public class News {
     @JoinColumn(name = "author_id")
     private OrganizerProfile author;
 
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "thumbnail_id")
     private Url thumbnailUrl;
 
-    @OneToMany(fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "news_id")
     private List<Url> images;
 
     @FullTextField(analyzer = "edge_ngram")
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String title;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 1000)
     private String content;
 
+    @IndexingDependency(reindexOnUpdate = ReindexOnUpdate.SHALLOW)
     @IndexedEmbedded(includePaths = {"name"})
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "news_tag",
             joinColumns = @JoinColumn(name = "news_id"),

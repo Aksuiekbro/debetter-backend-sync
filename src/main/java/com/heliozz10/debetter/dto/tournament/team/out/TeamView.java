@@ -13,4 +13,5 @@ public class TeamView extends SimpleTeamView {
     private Boolean active;
     private Boolean checkedIn;
     private Boolean disqualified;
+    private List<SimpleTournamentParticipantView> members;
 }

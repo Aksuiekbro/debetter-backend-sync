@@ -7,10 +7,12 @@ import com.heliozz10.debetter.dto.tournament.out.SimpleTournamentParticipantView
 import com.heliozz10.debetter.dto.tournament.out.TournamentParticipantView;
 import com.heliozz10.debetter.mapper.tournament.TournamentParticipantMapper;
 import com.heliozz10.debetter.service.tournament.TournamentParticipantService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RequiredArgsConstructor
@@ -23,12 +25,12 @@ public class TournamentParticipantController {
     @GetMapping
     public PageableResult<SimpleTournamentParticipantView> getTournamentParticipants(
             @PathVariable Long tournamentId,
-            @ModelAttribute TournamentParticipantGetParams params,
+            @Valid @ModelAttribute TournamentParticipantGetParams params,
             @PageableDefault(page = 0, size = 10) Pageable pageable
     ) {
         Page<TournamentParticipant> participants = tournamentParticipantService.getParticipants(tournamentId, params, pageable);
         return new PageableResult<>(
-                tournamentParticipantMapper.toSimpleTournamentParticipantViews(participants.getContent()),
+                participants.getContent().stream().map(tournamentParticipantService::toSimpleTournamentParticipantView).toList(),
                 participants.getTotalElements(),
                 participants.getTotalPages()
         );
@@ -36,6 +38,6 @@ public class TournamentParticipantController {
 
     @GetMapping("/{participantId}")
     public TournamentParticipantView getTournamentParticipant(@PathVariable Long tournamentId, @PathVariable Long participantId) {
-        return tournamentParticipantMapper.toTournamentParticipantView(tournamentParticipantService.getParticipantByTournamentIdAndId(tournamentId, participantId));
+        return tournamentParticipantService.toTournamentParticipantView(tournamentParticipantService.getParticipantByTournamentIdAndId(tournamentId, participantId));
     }
 }

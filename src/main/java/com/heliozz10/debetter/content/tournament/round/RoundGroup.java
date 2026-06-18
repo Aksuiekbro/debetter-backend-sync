@@ -15,6 +15,21 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "RoundGroup.full",
+                attributeNodes = {
+                        @NamedAttributeNode("tournament"),
+                        @NamedAttributeNode("rounds")
+                }
+        ),
+        @NamedEntityGraph(
+                name = "RoundGroup.forView",
+                attributeNodes = {
+                        @NamedAttributeNode("rounds")
+                }
+        )
+})
 @Entity
 @Table(name = "round_group", indexes = {
         @Index(name = "round_group_tournament_id_fkey", columnList = "tournament_id")

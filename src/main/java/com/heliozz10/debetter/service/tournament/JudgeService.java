@@ -44,25 +44,21 @@ public class JudgeService {
 
     @Transactional
     public Judge addJudgeToTournament(JudgeFormDto judgeFormDto, Long tournamentId) {
-        Tournament tournament = tournamentRepository.findById(judgeFormDto.tournamentId())
-                .orElseThrow(() -> new EntityNotFoundException("Tournament not found"));
+        Tournament tournament = tournamentRepository.getReferenceById(tournamentId);
 
         Judge judge = judgeMapper.toJudge(judgeFormDto);
 
         judge.setTournament(tournament);
-        tournament.getJudges().add(judge);
+        if (judgeFormDto.checkedIn() == null) judge.setCheckedIn(false);
         judge.setTimesJudged(0);
 
         return judgeRepository.save(judge);
     }
 
+    @Transactional
     public Judge updateJudge(JudgeFormDto judgeFormDto, Long tournamentId, Long judgeId) {
-        Judge judge = judgeRepository.findById(judgeId)
+        Judge judge = judgeRepository.findByTournamentIdAndId(tournamentId, judgeId)
                 .orElseThrow(() -> new EntityNotFoundException("Judge not found"));
-
-        if(!Objects.equals(judge.getTournament().getId(), tournamentId)) {
-            throw new IllegalArgumentException("Judge does not belong to this tournament");
-        }
 
         judgeMapper.updateJudge(judgeFormDto, judge);
 
@@ -71,9 +67,9 @@ public class JudgeService {
 
     @Transactional
     public void removeJudgeFromTournament(Long judgeId, Long tournamentId) {
-        Tournament tournament = tournamentRepository.findById(tournamentId)
-                .orElseThrow(() -> new EntityNotFoundException("Tournament not found"));
+        Judge judge = judgeRepository.findByTournamentIdAndId(tournamentId, judgeId)
+                .orElseThrow(() -> new EntityNotFoundException("Judge not found"));
 
-        tournament.getJudges().removeIf(j -> Objects.equals(j.getId(), judgeId));
+        judgeRepository.deleteById(judgeId);
     }
 }

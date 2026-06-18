@@ -5,6 +5,7 @@ import com.heliozz10.debetter.content.user.profile.OrganizerProfile;
 import com.heliozz10.debetter.content.user.profile.Profile;
 import com.heliozz10.debetter.repository.user.profile.OrganizerProfileRepository;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,12 +17,21 @@ public class OrganizerProfileService implements ProfileService {
 
     private final OrganizerProfileRepository organizerProfileRepository;
 
+    @Transactional(readOnly = true)
+    @Override
+    public OrganizerProfile getProfileById(Long id) {
+        return organizerProfileRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Organizer profile not found"));
+    }
+
     @Transactional
     @Override
     public OrganizerProfile createProfile(Long userId) {
         OrganizerProfile profile = new OrganizerProfile();
         User user = entityManager.getReference(User.class, userId);
         profile.setUser(user);
-        return organizerProfileRepository.save(profile);
+        OrganizerProfile savedProfile = organizerProfileRepository.save(profile);
+        user.setProfile(savedProfile);
+        return savedProfile;
     }
 }

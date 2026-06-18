@@ -11,6 +11,52 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "ParticipantInvitation.forView",
+                attributeNodes = {
+                        @NamedAttributeNode(value = "inviter", subgraph = "profileSubgraph"),
+                        @NamedAttributeNode(value = "invitee", subgraph = "profileSubgraph"),
+                        @NamedAttributeNode(value = "team", subgraph = "teamSubgraph")
+                },
+                subgraphs = {
+                        @NamedSubgraph(
+                                name = "profileSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode("user")
+                                }
+                        ),
+                        @NamedSubgraph(
+                                name = "teamSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode("tournament"),
+                                }
+                        )
+                }
+        ),
+        @NamedEntityGraph(
+                name = "ParticipantInvitation.withInviteeAndTeam",
+                attributeNodes = {
+                        @NamedAttributeNode(value = "invitee", subgraph = "profileSubgraph"),
+                        @NamedAttributeNode(value = "team", subgraph = "teamSubgraph")
+                },
+                subgraphs = {
+                        @NamedSubgraph(
+                                name = "profileSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode("user")
+                                }
+                        ),
+                        @NamedSubgraph(
+                                name = "teamSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode("tournament"),
+                                        @NamedAttributeNode("members")
+                                }
+                        )
+                }
+        )
+})
 @Entity
 @Table(name = "participant_invitation", uniqueConstraints = {
     @UniqueConstraint(columnNames = {"inviter_id", "invitee_id", "team_id"})

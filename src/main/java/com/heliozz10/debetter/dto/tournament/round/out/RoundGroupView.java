@@ -11,6 +11,6 @@ public class RoundGroupView {
     private Long id;
     private RoundGroupType type;
     private DebateFormat format;
-    private List<RoundView> rounds;
+    private List<SimpleRoundView> rounds;
     private Integer currentRoundNumber;
 }

@@ -18,6 +18,6 @@ public class Club {
     private Long id;
 
     @FullTextField(analyzer = "edge_ngram")
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, length = 120)
     private String name;
 }

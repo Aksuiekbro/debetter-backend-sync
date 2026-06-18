@@ -24,10 +24,11 @@ import com.heliozz10.debetter.service.util.media.FileService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -74,16 +75,23 @@ public class UserService implements UserDetailsService {
 
     @Transactional
     public User createUser(UserRegistrationDto dto) {
-        User user = userRepository.save(userMapper.toUser(dto));
+        if (userRepository.existsByUsernameOrEmail(dto.username(), dto.email())) {
+            throw new DataIntegrityViolationException("Username or email already exists");
+        }
+
+        User user = userMapper.toUser(dto);
+        user.setPassword(passwordEncoder.encode(dto.password()));
+        user.setCreatedAt(LocalDateTime.now());
+        user = userRepository.save(user);
         if(user.getRole() == Role.PARTICIPANT) {
             participantProfileService.createProfile(user.getId(), dto.city(), dto.institution());
         } else if(user.getRole() == Role.ORGANIZER) {
             organizerProfileService.createProfile(user.getId());
         }
-        user.setCreatedAt(LocalDateTime.now());
         return user;
     }
 
+    @CacheEvict(value = "currentUser", key = "#userId")
     @Transactional
     public User updateUser(UserUpdateDto dto, Long userId) {
         User user = userRepository.findById(userId).orElseThrow(() -> new EntityNotFoundException("User not found"));
@@ -101,6 +109,7 @@ public class UserService implements UserDetailsService {
         return user;
     }
 
+    @CacheEvict(value = "currentUser", key = "#userId")
     @Transactional
     public void addOrUpdateProfilePicture(Long userId, MultipartFile file) {
         Url url = fileService.uploadImage(file, "profile-pictures", UUID.randomUUID().toString());
@@ -110,6 +119,7 @@ public class UserService implements UserDetailsService {
         }
     }
 
+    @CacheEvict(value = "currentUser", key = "#userId")
     @Transactional
     public void deleteProfilePicture(Long userId) {
         User user = userRepository.findById(userId).orElseThrow(() -> new EntityNotFoundException("User not found"));
@@ -117,12 +127,7 @@ public class UserService implements UserDetailsService {
         user.setImageUrl(null);
     }
 
-    @Transactional
-    public void addOrUpdateSocialProfiles(Collection<SocialProfileDto> newProfiles) {
-        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        addOrUpdateSocialProfiles(user, newProfiles);
-    }
-
+    @CacheEvict(value = "currentUser", key = "#userId")
     @Transactional
     public void addOrUpdateSocialProfiles(Long userId, Collection<SocialProfileDto> newProfiles) {
         User user = userRepository.findById(userId).orElseThrow(() -> new EntityNotFoundException("User not found"));
@@ -133,42 +138,36 @@ public class UserService implements UserDetailsService {
     public void addOrUpdateSocialProfiles(User user, Collection<SocialProfileDto> newProfiles) {
         Map<SocialPlatform, SocialProfile> currentProfiles = user.getSocialProfiles()
                 .stream()
-                .collect(Collectors.toMap(SocialProfile::getPlatform, sp -> sp));
+                .collect(Collectors.toMap(SocialProfile::getSocialPlatform, sp -> sp));
+
+        if(newProfiles == null) {
+            return;
+        }
 
         for (SocialProfileDto dto : newProfiles) {
-            SocialProfile existing = currentProfiles.get(dto.platform());
+            SocialProfile existing = currentProfiles.get(dto.socialPlatform());
 
             if (existing != null) {
                 existing.setHandle(dto.handle());
-                existing.setIsPublic(dto.isPublic());
+                existing.setIsPublic(dto.isPublic() != null ? dto.isPublic() : true);
             } else {
                 SocialProfile newProfile = new SocialProfile();
-                newProfile.setPlatform(dto.platform());
+                newProfile.setSocialPlatform(dto.socialPlatform());
                 newProfile.setHandle(dto.handle());
-                newProfile.setIsPublic(dto.isPublic());
+                newProfile.setIsPublic(dto.isPublic() != null ? dto.isPublic() : true);
                 user.getSocialProfiles().add(newProfile);
             }
         }
     }
 
-    @Transactional
-    public void removeAllSocialProfiles() {
-        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        user.getSocialProfiles().clear();
-    }
-
+    @CacheEvict(value = "currentUser", key = "#userId")
     @Transactional
     public void removeAllSocialProfiles(Long userId) {
         User user = userRepository.findById(userId).orElseThrow(() -> new EntityNotFoundException("User not found"));
         user.getSocialProfiles().clear();
     }
 
-    @Transactional
-    public void removeSocialProfiles(Collection<SocialPlatform> platforms) {
-        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        removeSocialProfiles(user, platforms);
-    }
-
+    @CacheEvict(value = "currentUser", key = "#userId")
     @Transactional
     public void removeSocialProfiles(Long userId, Collection<SocialPlatform> platforms) {
         User user = userRepository.findById(userId).orElseThrow(() -> new EntityNotFoundException("User not found"));
@@ -178,13 +177,13 @@ public class UserService implements UserDetailsService {
     @Transactional
     public void removeSocialProfiles(User user, Collection<SocialPlatform> platforms) {
         for (SocialPlatform platform : platforms) {
-            user.getSocialProfiles().removeIf(sp -> sp.getPlatform() == platform);
+            user.getSocialProfiles().removeIf(sp -> sp.getSocialPlatform() == platform);
         }
     }
 
     @Transactional(readOnly = true)
     @Override
     public User loadUserByUsername(String username) throws UsernameNotFoundException {
-        return userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        return userRepository.findForSecurityByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
     }
 }

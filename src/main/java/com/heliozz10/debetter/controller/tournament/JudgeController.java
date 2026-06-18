@@ -7,10 +7,12 @@ import com.heliozz10.debetter.dto.tournament.in.JudgeGetParams;
 import com.heliozz10.debetter.dto.tournament.out.JudgeView;
 import com.heliozz10.debetter.mapper.tournament.JudgeMapper;
 import com.heliozz10.debetter.service.tournament.JudgeService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,7 +27,7 @@ public class JudgeController {
     @GetMapping
     public PageableResult<JudgeView> getJudges(
             @PathVariable Long tournamentId,
-            @ModelAttribute JudgeGetParams params,
+            @Valid @ModelAttribute JudgeGetParams params,
             @PageableDefault(page = 0, size = 10) Pageable pageable
     ) {
         Page<Judge> judges = judgeService.getJudges(tournamentId, params, pageable);
@@ -41,16 +43,19 @@ public class JudgeController {
         return judgeMapper.toJudgeView(judgeService.getJudgeByTournamentIdAndId(tournamentId, id));
     }
 
+    @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #tournamentId)")
     @PostMapping
-    public JudgeView addJudgeToTournament(@PathVariable Long tournamentId, @RequestBody JudgeFormDto judgeFormDto) {
+    public JudgeView addJudgeToTournament(@PathVariable Long tournamentId, @Valid @RequestBody JudgeFormDto judgeFormDto) {
         return judgeMapper.toJudgeView(judgeService.addJudgeToTournament(judgeFormDto, tournamentId));
     }
 
+    @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #tournamentId)")
     @PatchMapping("/{id}")
-    public JudgeView updateJudge(@PathVariable Long tournamentId, @PathVariable Long id, @RequestBody JudgeFormDto judgeFormDto) {
+    public JudgeView updateJudge(@PathVariable Long tournamentId, @PathVariable Long id, @Valid @RequestBody JudgeFormDto judgeFormDto) {
         return judgeMapper.toJudgeView(judgeService.updateJudge(judgeFormDto, tournamentId, id));
     }
 
+    @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #tournamentId)")
     @DeleteMapping("/{id}")
     public void removeJudgeFromTournament(@PathVariable Long tournamentId, @PathVariable Long id) {
         judgeService.removeJudgeFromTournament(id, tournamentId);

@@ -1,23 +1,49 @@
 package com.heliozz10.debetter.content.user;
 
 import com.heliozz10.debetter.content.user.profile.Profile;
+import com.heliozz10.debetter.content.user.role.UserTournamentRole;
 import com.heliozz10.debetter.content.util.media.Url;
 import com.heliozz10.debetter.content.util.socials.SocialProfile;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
+import org.hibernate.search.mapper.pojo.automaticindexing.ReindexOnUpdate;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.Indexed;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.IndexedEmbedded;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.IndexingDependency;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.stream.Stream;
 
+//TODO: add rating
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Indexed
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "User.forView",
+                attributeNodes = {
+                        @NamedAttributeNode("profile"),
+                        @NamedAttributeNode("socialProfiles")
+                }
+        ),
+        @NamedEntityGraph(
+                name = "User.forSecurity",
+                attributeNodes = {
+                        @NamedAttributeNode("authorities"),
+                        @NamedAttributeNode("profile")
+                }
+        )
+})
 @Entity
 @Table(name = "_user")
 public class User implements UserDetails {
@@ -29,7 +55,7 @@ public class User implements UserDetails {
     @Column(unique = true, nullable = false)
     private String username;
 
-    @Column
+    @Column(unique = true, nullable = false)
     private String password;
 
     @FullTextField(analyzer = "edge_ngram")
@@ -44,7 +70,7 @@ public class User implements UserDetails {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "image_id")
     private Url imageUrl;
 
@@ -63,6 +89,7 @@ public class User implements UserDetails {
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private Profile profile;
 
+    @IndexingDependency(reindexOnUpdate = ReindexOnUpdate.SHALLOW)
     @IndexedEmbedded(includePaths = {"handle"})
     @OneToMany(fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "user_id")
@@ -94,7 +121,7 @@ public class User implements UserDetails {
     }
 
     @Override
-    public List<Authority> getAuthorities() {
+    public Collection<? extends GrantedAuthority> getAuthorities() {
         return authorities;
     }
 }

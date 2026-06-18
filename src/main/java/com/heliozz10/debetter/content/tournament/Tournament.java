@@ -5,21 +5,40 @@ import com.heliozz10.debetter.content.tournament.announcement.Announcement;
 import com.heliozz10.debetter.content.tournament.round.RoundGroup;
 import com.heliozz10.debetter.content.tournament.team.Team;
 import com.heliozz10.debetter.content.user.profile.OrganizerProfile;
+import com.heliozz10.debetter.content.user.role.UserTournamentRole;
 import com.heliozz10.debetter.content.util.media.Url;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.search.mapper.pojo.automaticindexing.ReindexOnUpdate;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.Indexed;
 import org.hibernate.search.mapper.pojo.mapping.definition.annotation.IndexedEmbedded;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.IndexingDependency;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Indexed
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "Tournament.withOrganizers",
+                attributeNodes = {
+                        @NamedAttributeNode("organizers")
+                }
+        ),
+        @NamedEntityGraph(
+                name = "Tournament.withTeams",
+                attributeNodes = {
+                        @NamedAttributeNode("teams")
+                }
+        )
+})
 @Entity
 @Table(name = "tournament")
 public class Tournament {
@@ -28,13 +47,13 @@ public class Tournament {
     private Long id;
 
     @FullTextField(analyzer = "edge_ngram")
-    @Column(nullable = false)
+    @Column(nullable = false, length = 120)
     private String name;
 
-    @Column
+    @Column(length = 5000)
     private String description;
 
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "image_id")
     private Url imageUrl;
 
@@ -48,7 +67,7 @@ public class Tournament {
     private LocalDateTime registrationDeadline;
 
     @FullTextField(analyzer = "edge_ngram")
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String location;
 
     @Enumerated(EnumType.STRING)
@@ -87,14 +106,18 @@ public class Tournament {
     @Column(nullable = false)
     private DebateFormat teamEliminationFormat;
 
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "tournament", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<UserTournamentRole> tournamentRoles = new HashSet<>();
+
     @OneToMany(mappedBy = "tournament", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<RoundGroup> roundGroups;
 
     @OneToMany(mappedBy = "tournament", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Schedule> schedules;
 
+    @IndexingDependency(reindexOnUpdate = ReindexOnUpdate.SHALLOW)
     @IndexedEmbedded(includePaths = {"name"})
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "tournament_tag",
             joinColumns = @JoinColumn(name = "tournament_id"),

@@ -6,12 +6,9 @@ import com.heliozz10.debetter.dto.user.out.SimpleUserView;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-@EqualsAndHashCode(callSuper = true)
 @Data
-public class ParticipantProfileView extends ProfileView {
-    private Long id;
+public class ParticipantProfileView {
     private City city;
     private Institution institution;
     private Integer rating;
-    private SimpleUserView user;
 }

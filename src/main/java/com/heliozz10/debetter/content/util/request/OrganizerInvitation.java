@@ -11,6 +11,39 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "OrganizerInvitation.forView",
+                attributeNodes = {
+                        @NamedAttributeNode(value = "inviter", subgraph = "profileSubgraph"),
+                        @NamedAttributeNode(value = "invitee", subgraph = "profileSubgraph"),
+                        @NamedAttributeNode(value = "tournament")
+                },
+                subgraphs = {
+                        @NamedSubgraph(
+                                name = "profileSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode("user")
+                                }
+                        )
+                }
+        ),
+        @NamedEntityGraph(
+                name = "OrganizerInvitation.withInviteeAndTournament",
+                attributeNodes = {
+                        @NamedAttributeNode(value = "invitee", subgraph = "profileSubgraph"),
+                        @NamedAttributeNode(value = "tournament")
+                },
+                subgraphs = {
+                        @NamedSubgraph(
+                                name = "profileSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode("user")
+                                }
+                        )
+                }
+        )
+})
 @Entity
 @Table(name = "organizer_invitation", uniqueConstraints = {
     @UniqueConstraint(columnNames = {"inviter_id", "invitee_id", "tournament_id"})

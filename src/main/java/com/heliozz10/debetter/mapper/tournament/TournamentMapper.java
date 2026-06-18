@@ -2,7 +2,6 @@ package com.heliozz10.debetter.mapper.tournament;
 
 import com.heliozz10.debetter.content.tournament.Tournament;
 import com.heliozz10.debetter.dto.tournament.in.TournamentFormDto;
-import com.heliozz10.debetter.dto.tournament.out.SimpleTournamentView;
 import com.heliozz10.debetter.dto.tournament.out.TournamentView;
 import com.heliozz10.debetter.mapper.TagMapper;
 import org.mapstruct.InheritConfiguration;
@@ -23,10 +22,7 @@ public interface TournamentMapper {
     Tournament toTournament(TournamentFormDto dto);
     void updateTournament(TournamentFormDto dto, @MappingTarget Tournament tournament);
 
-    SimpleTournamentView toSimpleTournamentView(Tournament tournament);
-
-    List<SimpleTournamentView> toSimpleTournamentViews(List<Tournament> tournaments);
-
-    @InheritConfiguration(name = "toSimpleTournamentView")
     TournamentView toTournamentView(Tournament tournament);
+
+    List<TournamentView> toTournamentViews(List<Tournament> tournaments);
 }

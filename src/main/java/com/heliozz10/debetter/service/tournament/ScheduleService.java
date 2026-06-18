@@ -12,6 +12,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Objects;
@@ -39,32 +40,28 @@ public class ScheduleService {
     }
 
     @Transactional
-    public Schedule addScheduleToTournament(ScheduleFormDto scheduleFormDto, Long tournamentId) {
-        Tournament tournament = tournamentRepository.findById(tournamentId)
-                .orElseThrow(() -> new EntityNotFoundException("Tournament not found"));
+    public Schedule addScheduleToTournament(ScheduleFormDto scheduleFormDto, MultipartFile image, Long tournamentId) {
+        Tournament tournament = tournamentRepository.getReferenceById(tournamentId);
 
         Schedule schedule = scheduleMapper.toSchedule(scheduleFormDto);
 
         schedule.setTournament(tournament);
-        tournament.getSchedules().add(schedule);
 
-        Url url = fileService.uploadImage(scheduleFormDto.image(), "schedules", UUID.randomUUID().toString());
-        schedule.setImageUrl(url);
+        if (image != null) {
+            Url url = fileService.uploadImage(image, "schedules", UUID.randomUUID().toString());
+            schedule.setImageUrl(url);
+        }
 
         return scheduleRepository.save(schedule);
     }
 
     @Transactional
     public void removeScheduleFromTournament(Long scheduleId, Long tournamentId) {
-        Schedule schedule = scheduleRepository.findById(scheduleId)
+        Schedule schedule = scheduleRepository.findByTournamentIdAndId(tournamentId, scheduleId)
                 .orElseThrow(() -> new EntityNotFoundException("Schedule not found"));
-
-        if(!Objects.equals(schedule.getTournament().getId(), tournamentId)) {
-            throw new EntityNotFoundException("Schedule not found");
-        }
 
         fileService.deleteFile(schedule.getImageUrl());
 
-        scheduleRepository.removeScheduleFromTournament(scheduleId, tournamentId);
+        scheduleRepository.deleteById(scheduleId);
     }
 }

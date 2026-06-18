@@ -14,6 +14,34 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "Match.forView",
+                attributeNodes = {
+                        @NamedAttributeNode("team1"),
+                        @NamedAttributeNode("team2"),
+                        @NamedAttributeNode("team3"),
+                        @NamedAttributeNode("team4"),
+                        @NamedAttributeNode(value = "debater1", subgraph = "debaterSubgraph"),
+                        @NamedAttributeNode(value = "debater2", subgraph = "debaterSubgraph"),
+                        @NamedAttributeNode("judge")
+                },
+                subgraphs = {
+                        @NamedSubgraph(
+                                name = "debaterSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode(value = "participantProfile", subgraph = "profileSubgraph")
+                                }
+                        ),
+                        @NamedSubgraph(
+                                name = "profileSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode("user")
+                                }
+                        )
+                }
+        )
+})
 @Entity
 @Table(name = "match", indexes = {
         @Index(name = "match_round_id_fkey", columnList = "round_id")
@@ -89,6 +117,9 @@ public class Match {
 
     @Column
     private Integer debater2Score;
+
+    @Column
+    private Boolean isBye;
 
     @Column(nullable = false)
     private Boolean completed;

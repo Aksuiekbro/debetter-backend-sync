@@ -5,6 +5,7 @@ import com.heliozz10.debetter.content.tournament.match.Match;
 import com.heliozz10.debetter.content.tournament.round.RoundGroup;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +18,7 @@ import java.util.List;
 
 @Repository
 public interface MatchRepository extends JpaRepository<Match, Long> {
+    @EntityGraph(value = "Match.forView", type = EntityGraph.EntityGraphType.LOAD)
     Page<Match> findByRoundId(Long roundId, Pageable pageable);
 
     @Query("SELECT m FROM Match m WHERE m.team1 = :teamId OR m.team2 = :teamId OR m.team3 = :teamId OR m.team4 = :teamId")

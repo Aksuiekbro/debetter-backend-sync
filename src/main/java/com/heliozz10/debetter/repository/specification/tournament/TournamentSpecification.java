@@ -85,8 +85,8 @@ public class TournamentSpecification {
                 predicates.add(cb.equal(root.get("league"), params.league()));
             }
 
-            if(params.nonFull()) {
-                predicates.add(cb.lessThan(root.get("teams"), root.get("teamLimit")));
+            if(params.nonFull() != null && params.nonFull()) {
+                predicates.add(cb.lessThan(cb.size(root.get("teams")), root.get("teamLimit")));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

@@ -6,6 +6,7 @@ import com.heliozz10.debetter.content.user.profile.institution.Institution;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.io.Serializable;
 import java.util.List;
 
 @Getter
@@ -14,12 +15,12 @@ import java.util.List;
 @AllArgsConstructor
 @Entity
 @Table(name = "participant_profile")
-public class ParticipantProfile extends Profile {
-    @ManyToOne(fetch = FetchType.LAZY)
+public class ParticipantProfile extends Profile implements Serializable {
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "city_id")
     private City city;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "institution_id")
     private Institution institution;
 

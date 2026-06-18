@@ -12,7 +12,9 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "team_matchup_history")
+@Table(name = "team_matchup_history", uniqueConstraints = {
+        @UniqueConstraint(name = "uc_teammatchuphistory", columnNames = {"team1_id", "team2_id"})
+})
 public class TeamMatchupHistory {
     @Id
     @GeneratedValue

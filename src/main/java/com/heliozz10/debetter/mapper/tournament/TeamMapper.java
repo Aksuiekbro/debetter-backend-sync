@@ -14,6 +14,7 @@ import java.util.List;
         TournamentParticipantMapper.class
 })
 public interface TeamMapper {
+    @Mapping(target = "club", ignore = true)
     Team toTeam(TeamFormDto dto);
 
     SimpleTeamView toSimpleTeamView(Team team);
@@ -22,4 +23,7 @@ public interface TeamMapper {
 
     @InheritConfiguration(name = "toSimpleTeamView")
     TeamView toTeamView(Team team);
+
+    @InheritConfiguration(name = "toSimpleTeamView")
+    List<TeamView> toTeamViews(List<Team> teams);
 }

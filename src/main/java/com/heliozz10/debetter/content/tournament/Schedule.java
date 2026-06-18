@@ -15,13 +15,13 @@ public class Schedule {
     @GeneratedValue
     private Long id;
 
-    @Column
+    @Column(length = 120)
     private String name;
 
-    @Column
+    @Column(length = 5000)
     private String description;
 
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "image_id")
     private Url imageUrl;
 

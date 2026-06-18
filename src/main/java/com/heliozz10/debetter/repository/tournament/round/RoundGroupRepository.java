@@ -3,6 +3,7 @@ package com.heliozz10.debetter.repository.tournament.round;
 import com.heliozz10.debetter.content.tournament.DebateFormat;
 import com.heliozz10.debetter.content.tournament.round.RoundGroup;
 import com.heliozz10.debetter.content.tournament.round.RoundGroupType;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +14,7 @@ import java.util.Optional;
 
 @Repository
 public interface RoundGroupRepository extends JpaRepository<RoundGroup, Long> {
+    @EntityGraph(value = "RoundGroup.forView", type = EntityGraph.EntityGraphType.LOAD)
     List<RoundGroup> findByTournamentId(Long tournamentId);
 
     //THIS SHOULD BE A LIST OF ROUNDS GROUPS, HOWEVER THE COMPOSITE KEY IN THE ROUND GROUP ENTITY IS NOT IMPLEMENTED
@@ -23,4 +25,7 @@ public interface RoundGroupRepository extends JpaRepository<RoundGroup, Long> {
     void changeRoundGroupFormat(RoundGroupType roundGroupType, DebateFormat format, Long tournamentId);
 
     Optional<RoundGroup> findByTournamentIdAndId(Long tournamentId, Long id);
+
+    @EntityGraph(value = "RoundGroup.full", type = EntityGraph.EntityGraphType.LOAD)
+    Optional<RoundGroup> findFullByTournamentIdAndId(Long tournamentId, Long id);
 }

@@ -9,10 +9,12 @@ import com.heliozz10.debetter.dto.tournament.in.FeedbackGetParams;
 import com.heliozz10.debetter.dto.tournament.out.FeedbackView;
 import com.heliozz10.debetter.mapper.tournament.FeedbackMapper;
 import com.heliozz10.debetter.service.tournament.FeedbackService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,16 +25,15 @@ public class FeedbackController {
     private final FeedbackService feedbackService;
     private final FeedbackMapper feedbackMapper;
 
-    //TODO: special security case
     @GetMapping
     public PageableResult<FeedbackView> getFeedbacks(
             @PathVariable Long tournamentId,
-            @ModelAttribute FeedbackGetParams params,
+            @Valid @ModelAttribute FeedbackGetParams params,
             @PageableDefault(page = 0, size = 10) Pageable pageable
     ) {
         Page<Feedback> feedbacks = feedbackService.getFeedbacks(tournamentId, params, pageable);
         return new PageableResult<>(
-                feedbackMapper.toFeedbackViews(feedbacks.getContent()),
+                feedbacks.getContent().stream().map(feedbackService::toFeedbackView).toList(),
                 feedbacks.getTotalElements(),
                 feedbacks.getTotalPages()
         );
@@ -40,23 +41,30 @@ public class FeedbackController {
 
     @GetMapping("/{id}")
     public FeedbackView getFeedbackById(@PathVariable Long tournamentId, @PathVariable Long id) {
-        return feedbackMapper.toFeedbackView(feedbackService.getFeedbackByTournamentIdAndId(tournamentId, id));
+        return feedbackService.toFeedbackView(feedbackService.getFeedbackByTournamentIdAndId(tournamentId, id));
     }
 
+    @PreAuthorize("principal.role.name() == 'PARTICIPANT' and @tournamentSecurity.hasViewPermission(principal, #tournamentId)")
     @PostMapping
-    public FeedbackView addFeedback(@PathVariable Long tournamentId, @RequestBody FeedbackDto dto, Authentication authentication) {
+    public FeedbackView addFeedback(@PathVariable Long tournamentId, @Valid @RequestBody FeedbackDto dto, Authentication authentication) {
         User user = (User) authentication.getPrincipal();
         ParticipantProfile profile = (ParticipantProfile) user.getProfile();
-        return feedbackMapper.toFeedbackView(feedbackService.addFeedbackToTournament(dto, tournamentId, profile.getId()));
+        return feedbackService.toFeedbackView(feedbackService.addFeedbackToTournament(dto, tournamentId, profile.getId()));
     }
 
+    @PreAuthorize("principal.role.name() == 'PARTICIPANT' and @tournamentSecurity.hasViewPermission(principal, #tournamentId)")
     @PatchMapping("/{id}")
-    public FeedbackView updateFeedback(@PathVariable Long tournamentId, @PathVariable Long id, @RequestBody FeedbackDto dto) {
-        return feedbackMapper.toFeedbackView(feedbackService.updateFeedback(dto, id));
+    public FeedbackView updateFeedback(Authentication authentication, @PathVariable Long id, @Valid @RequestBody FeedbackDto dto) {
+        User user = (User) authentication.getPrincipal();
+        ParticipantProfile profile = (ParticipantProfile) user.getProfile();
+        return feedbackService.toFeedbackView(feedbackService.updateFeedback(dto, id, profile.getId()));
     }
 
+    @PreAuthorize("principal.role.name() == 'PARTICIPANT'")
     @DeleteMapping("/{id}")
-    public void deleteFeedback(@PathVariable Long tournamentId, @PathVariable Long id) {
-        feedbackService.deleteFeedback(id);
+    public void deleteFeedback(Authentication authentication, @PathVariable Long id) {
+        User user = (User) authentication.getPrincipal();
+        ParticipantProfile profile = (ParticipantProfile) user.getProfile();
+        feedbackService.deleteFeedback(id, profile.getId());
     }
 }

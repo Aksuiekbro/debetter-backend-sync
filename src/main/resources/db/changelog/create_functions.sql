@@ -1,9 +1,7 @@
 CREATE OR REPLACE FUNCTION update_match_scores_bulk(results_json jsonb)
 RETURNS void AS $$
-DECLARE
-    rec RECORD;
 BEGIN
-    FOR rec IN
+    WITH input AS (
         SELECT *
         FROM jsonb_to_recordset(results_json) AS x(
             tournament_id BIGINT,
@@ -15,42 +13,70 @@ BEGIN
             debater1score INTEGER,
             debater2score INTEGER
         )
-    LOOP
-        UPDATE match
-        SET team1score    = rec.team1score,
-            team2score    = rec.team2score,
-            team3score    = rec.team3score,
-            team4score    = rec.team4score,
-            debater1score = rec.debater1score,
-            debater2score = rec.debater2score,
-            completed     = true
-        WHERE id = rec.match_id
-        AND tournament_id = rec.tournament_id;
+    )
 
-        UPDATE team
-        SET preliminary_score = preliminary_score + rec.team1score
-        WHERE id = (SELECT team1_id FROM match WHERE id = rec.match_id);
+    UPDATE "match" m
+    SET team1score    = COALESCE(i.team1score, m.team1score),
+        team2score    = COALESCE(i.team2score, m.team2score),
+        team3score    = COALESCE(i.team3score, m.team3score),
+        team4score    = COALESCE(i.team4score, m.team4score),
+        debater1score = COALESCE(i.debater1score, m.debater1score),
+        debater2score = COALESCE(i.debater2score, m.debater2score),
+        completed     = true
+    FROM input i
+    JOIN round r ON m.round_id = r.id
+    JOIN round_group rg ON r.round_group_id = rg.id
+    JOIN tournament t ON rg.tournament_id = t.id
+    WHERE m.id = i.match_id
+      AND t.id = i.tournament_id;
 
-        UPDATE team
-        SET preliminary_score = preliminary_score + rec.team2score
-        WHERE id = (SELECT team2_id FROM match WHERE id = rec.match_id);
+    WITH team_scores AS (
+        SELECT (m.team1_id) AS team_id, SUM(i.team1score) AS delta
+        FROM input i
+        JOIN match m ON m.id = i.match_id
+        WHERE i.team1score IS NOT NULL
+        GROUP BY m.team1_id
+        UNION ALL
+        SELECT m.team2_id, SUM(i.team2score)
+        FROM input i
+        JOIN match m ON m.id = i.match_id
+        WHERE i.team2score IS NOT NULL
+        GROUP BY m.team2_id
+        UNION ALL
+        SELECT m.team3_id, SUM(i.team3score)
+        FROM input i
+        JOIN match m ON m.id = i.match_id
+        WHERE i.team3score IS NOT NULL
+        GROUP BY m.team3_id
+        UNION ALL
+        SELECT m.team4_id, SUM(i.team4score)
+        FROM input i
+        JOIN match m ON m.id = i.match_id
+        WHERE i.team4score IS NOT NULL
+        GROUP BY m.team4_id
+    )
+    UPDATE team t
+    SET preliminary_score = t.preliminary_score + ts.delta
+    FROM team_scores ts
+    WHERE t.id = ts.team_id;
 
-        UPDATE team
-        SET preliminary_score = preliminary_score + rec.team3score
-        WHERE id = (SELECT team3_id FROM match WHERE id = rec.match_id);
-
-        UPDATE team
-        SET preliminary_score = preliminary_score + rec.team4score
-        WHERE id = (SELECT team4_id FROM match WHERE id = rec.match_id);
-
-        UPDATE debater
-        SET speaker_score = speaker_score + rec.debater1score
-        WHERE id = (SELECT debater1_id FROM match WHERE id = rec.match_id);
-
-        UPDATE debater
-        SET speaker_score = speaker_score + rec.debater2score
-        WHERE id = (SELECT debater2_id FROM match WHERE id = rec.match_id);
-    END LOOP;
+    WITH debater_scores AS (
+        SELECT m.debater1_id AS debater_id, SUM(i.debater1score) AS delta
+        FROM input i
+        JOIN match m ON m.id = i.match_id
+        WHERE i.debater1score IS NOT NULL
+        GROUP BY m.debater1_id
+        UNION ALL
+        SELECT m.debater2_id, SUM(i.debater2score)
+        FROM input i
+        JOIN match m ON m.id = i.match_id
+        WHERE i.debater2score IS NOT NULL
+        GROUP BY m.debater2_id
+    )
+    UPDATE debater d
+    SET speaker_score = d.speaker_score + ds.delta
+    FROM debater_scores ds
+    WHERE d.id = ds.debater_id;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -60,9 +86,14 @@ DECLARE
     v_tournament_id BIGINT;
     v_judge_count INT;
 BEGIN
-    SELECT tournament_id INTO v_tournament_id FROM round WHERE id = p_round_id;
+    SELECT rg.tournament_id
+    INTO v_tournament_id
+    FROM round r
+    JOIN round_group rg
+      ON r.round_group_id = rg.id
+    WHERE r.id = p_round_id;
 
-    SELECT COUNT(*) INTO v_judge_count FROM judge WHERE tournament_id = v_tournament_id;
+    SELECT COUNT(*) INTO v_judge_count FROM judge WHERE tournament_id = v_tournament_id AND checked_in = true;
 
     IF v_judge_count = 0 THEN
         RETURN;
@@ -71,7 +102,7 @@ BEGIN
     WITH RankedJudges AS (
         SELECT id, ROW_NUMBER() OVER (ORDER BY times_judged ASC, id ASC) as rn
         FROM judge
-        WHERE tournament_id = v_tournament_id
+        WHERE tournament_id = v_tournament_id AND checked_in = true
     ),
     UnassignedMatches AS (
         SELECT id, ROW_NUMBER() OVER (ORDER BY id ASC) as rn

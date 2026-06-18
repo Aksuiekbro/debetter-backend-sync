@@ -1,8 +1,8 @@
 package com.heliozz10.debetter.dto.util.request.out;
 
 import com.heliozz10.debetter.dto.tournament.out.TournamentView;
-import com.heliozz10.debetter.dto.tournament.team.out.TeamView;
-import com.heliozz10.debetter.dto.user.profile.out.ParticipantProfileView;
+import com.heliozz10.debetter.dto.tournament.team.out.SimpleTeamView;
+import com.heliozz10.debetter.dto.user.out.SimpleUserView;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -10,10 +10,10 @@ import java.time.LocalDateTime;
 @Data
 public class ParticipantInvitationView {
     private Long id;
-    private ParticipantProfileView inviter;
-    private ParticipantProfileView invitee;
+    private SimpleUserView inviter;
+    private SimpleUserView invitee;
     private TournamentView tournament;
-    private TeamView team;
+    private SimpleTeamView team;
     private LocalDateTime timestamp;
     private Boolean accepted;
 }

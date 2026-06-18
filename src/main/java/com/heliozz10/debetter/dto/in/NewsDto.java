@@ -10,7 +10,5 @@ import java.util.List;
 public record NewsDto (
     @NotNull(groups = {OnCreate.class}) @Size(min = 1, max = 100) String title,
     @NotNull(groups = {OnCreate.class}) @Size(min = 1, max = 1000) String content,
-    MultipartFile thumbnail,
-    List<MultipartFile> images,
-    List<String> tags
+    @Size(max = 20) List<@Size(min = 1, max = 20) String> tags
 ) {}
