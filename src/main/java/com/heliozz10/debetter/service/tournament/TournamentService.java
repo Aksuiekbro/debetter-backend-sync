@@ -309,7 +309,7 @@ public class TournamentService {
     }
 
     private void validateTeamLimit(Tournament tournament, TeamFormDto teamFormDto) {
-        if(tournament.getTeams().size() + 1 >= tournament.getTeamLimit()) {
+        if(tournament.getTeams().size() >= tournament.getTeamLimit()) {
             throw new IllegalArgumentException("Team limit reached");
         }
     }

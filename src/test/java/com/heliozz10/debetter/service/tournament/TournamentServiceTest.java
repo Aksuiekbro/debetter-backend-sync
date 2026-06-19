@@ -2,6 +2,10 @@ package com.heliozz10.debetter.service.tournament;
 
 import com.heliozz10.debetter.content.tournament.DebateFormat;
 import com.heliozz10.debetter.content.tournament.Tournament;
+import com.heliozz10.debetter.content.tournament.team.Club;
+import com.heliozz10.debetter.content.tournament.team.Team;
+import com.heliozz10.debetter.content.user.User;
+import com.heliozz10.debetter.content.user.profile.ParticipantProfile;
 import com.heliozz10.debetter.dto.tournament.team.in.TeamFormDto;
 import com.heliozz10.debetter.mapper.tournament.JudgeMapper;
 import com.heliozz10.debetter.mapper.tournament.TeamMapper;
@@ -35,11 +39,14 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -149,5 +156,58 @@ class TournamentServiceTest {
         assertEquals("You are already registered for this tournament.", exception.getMessage());
         verify(teamRepository, never()).save(any());
         verify(tournamentSecurity, never()).assignRoleToUser(any(), any(), any());
+    }
+
+    @Test
+    void registerTeamAllowsTeamThatExactlyReachesLimit() {
+        Tournament tournament = buildTournamentWithExistingTeamCount(31);
+        TeamFormDto dto = new TeamFormDto("Team 32", "NIS", null, List.of());
+        Team team = new Team();
+        Club club = new Club();
+        ParticipantProfile creator = new ParticipantProfile();
+        creator.setId(2000L);
+        User user = new User();
+        user.setId(3000L);
+        creator.setUser(user);
+
+        when(tournamentRepository.findWithTeamsById(53L)).thenReturn(Optional.of(tournament));
+        when(tournamentParticipantRepository.existsByTeam_Tournament_IdAndParticipantProfile_Id(53L, 2000L))
+                .thenReturn(false);
+        when(teamMapper.toTeam(dto)).thenReturn(team);
+        when(commonService.findOrCreateEntity("NIS", Club.class, entityManager)).thenReturn(club);
+        when(teamRepository.save(team)).thenReturn(team);
+        when(participantProfileRepository.findById(2000L)).thenReturn(Optional.of(creator));
+
+        assertDoesNotThrow(() -> tournamentService.registerTeamToTournament(dto, 53L, 2000L));
+
+        verify(teamRepository, times(2)).save(team);
+        verify(tournamentSecurity).assignRoleToUser(3000L, 53L, com.heliozz10.debetter.content.user.role.TournamentRole.VIEW);
+    }
+
+    @Test
+    void registerTeamRejectsTeamAfterLimitIsReached() {
+        Tournament tournament = buildTournamentWithExistingTeamCount(32);
+        TeamFormDto dto = new TeamFormDto("Team 33", "NIS", null, List.of());
+
+        when(tournamentRepository.findWithTeamsById(53L)).thenReturn(Optional.of(tournament));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> tournamentService.registerTeamToTournament(dto, 53L, 2000L)
+        );
+
+        assertEquals("Team limit reached", exception.getMessage());
+        verify(teamRepository, never()).save(any());
+        verify(tournamentSecurity, never()).assignRoleToUser(any(), any(), any());
+    }
+
+    private Tournament buildTournamentWithExistingTeamCount(int teamCount) {
+        Tournament tournament = new Tournament();
+        tournament.setId(53L);
+        tournament.setRegistrationDeadline(LocalDateTime.now().plusDays(1));
+        tournament.setPreliminaryFormat(DebateFormat.APF);
+        tournament.setTeamLimit(32);
+        tournament.setTeams(IntStream.range(0, teamCount).mapToObj(i -> new Team()).toList());
+        return tournament;
     }
 }
