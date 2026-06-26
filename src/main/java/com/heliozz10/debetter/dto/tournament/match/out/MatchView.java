@@ -25,5 +25,9 @@ public class MatchView {
     private Integer team4Score;
     private Integer debater1Score;
     private Integer debater2Score;
+    private Boolean team1Won;
+    private Boolean team2Won;
+    private Boolean team3Won;
+    private Boolean team4Won;
     private Boolean completed;
 }

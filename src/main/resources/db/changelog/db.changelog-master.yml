@@ -1,3 +1,5 @@
 databaseChangeLog:
   - include:
       file: db/changelog/create_functions.sql
+  - include:
+      file: db/changelog/add_match_winner_columns.sql

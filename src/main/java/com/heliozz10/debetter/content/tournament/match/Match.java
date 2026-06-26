@@ -119,6 +119,18 @@ public class Match {
     private Integer debater2Score;
 
     @Column
+    private Boolean team1Won;
+
+    @Column
+    private Boolean team2Won;
+
+    @Column
+    private Boolean team3Won;
+
+    @Column
+    private Boolean team4Won;
+
+    @Column
     private Boolean isBye;
 
     @Column(nullable = false)

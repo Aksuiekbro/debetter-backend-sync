@@ -220,16 +220,20 @@ public class MatchService {
             objectNode.put("match_id", result.matchId());
 
             for (int i = 0; i < 4; i++) {
-                String fieldName = "team" + (i + 1) + "score";
                 Integer score = null;
+                Boolean won = null;
                 if (result.teamResults() != null && i < result.teamResults().size()) {
-                    List<ParticipantScoreDto> ps = result.teamResults().get(i).participantScores();
+                    var teamResult = result.teamResults().get(i);
+                    List<ParticipantScoreDto> ps = teamResult.participantScores();
                     score = ps.stream()
                             .map(ParticipantScoreDto::score)
                             .filter(Objects::nonNull)
                             .reduce(0, Integer::sum);
+                    won = teamResult.won();
                 }
-                objectNode.put(fieldName, score);
+                // Positional mapping (teamResults[i] -> team{i+1}), matching the frontend payload order.
+                objectNode.put("team" + (i + 1) + "score", score);
+                objectNode.put("team" + (i + 1) + "won", won);
             }
 
             for (int i = 0; i < 2; i++) {

@@ -8,5 +8,6 @@ import java.util.List;
 
 public record TeamResultDto (
         @NotNull @Positive Long teamId,
+        Boolean won,
         @NotNull @Valid List<ParticipantScoreDto> participantScores
 ) {}
