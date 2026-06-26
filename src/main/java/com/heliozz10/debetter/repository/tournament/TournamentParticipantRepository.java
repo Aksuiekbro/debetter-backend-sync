@@ -22,5 +22,7 @@ public interface TournamentParticipantRepository extends JpaRepository<Tournamen
     @EntityGraph(value = "TournamentParticipant.forView", type = EntityGraph.EntityGraphType.LOAD)
     Optional<TournamentParticipant> findByTournamentIdAndId(Long tournamentId, Long id);
 
+    Optional<TournamentParticipant> findByTeam_Tournament_IdAndParticipantProfile_Id(Long tournamentId, Long participantProfileId);
+
     boolean existsByTeam_Tournament_IdAndParticipantProfile_Id(Long tournamentId, Long participantProfileId);
 }

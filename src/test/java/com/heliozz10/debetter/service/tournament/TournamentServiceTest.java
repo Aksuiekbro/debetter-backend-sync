@@ -2,6 +2,9 @@ package com.heliozz10.debetter.service.tournament;
 
 import com.heliozz10.debetter.content.tournament.DebateFormat;
 import com.heliozz10.debetter.content.tournament.Tournament;
+import com.heliozz10.debetter.content.tournament.round.Round;
+import com.heliozz10.debetter.content.tournament.round.RoundGroup;
+import com.heliozz10.debetter.content.tournament.round.RoundGroupType;
 import com.heliozz10.debetter.content.tournament.team.Club;
 import com.heliozz10.debetter.content.tournament.team.Team;
 import com.heliozz10.debetter.content.user.User;
@@ -28,6 +31,7 @@ import com.heliozz10.debetter.service.tournament.round.RoundService;
 import com.heliozz10.debetter.service.user.UserService;
 import com.heliozz10.debetter.service.util.media.FileService;
 import com.heliozz10.debetter.service.util.request.ParticipantInvitationService;
+import com.heliozz10.debetter.projection.TournamentCheckResult;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -199,6 +203,50 @@ class TournamentServiceTest {
         assertEquals("Team limit reached", exception.getMessage());
         verify(teamRepository, never()).save(any());
         verify(tournamentSecurity, never()).assignRoleToUser(any(), any(), any());
+    }
+
+    @Test
+    void startTournamentGeneratesInitialPairingsAfterAssigningFirstRoundTeams() {
+        Tournament tournament = buildTournamentWithExistingTeamCount(32);
+        RoundGroup preliminaryGroup = new RoundGroup();
+        preliminaryGroup.setTournament(tournament);
+        preliminaryGroup.setType(RoundGroupType.PRELIMINARY);
+        preliminaryGroup.setFormat(DebateFormat.APF);
+
+        Round firstRound = new Round();
+        firstRound.setId(65L);
+        firstRound.setRoundGroup(preliminaryGroup);
+        firstRound.setRoundNumber(1);
+        firstRound.setTeams(new ArrayList<>());
+
+        when(tournamentRepository.checkTournament(53L)).thenReturn(new TournamentCheckResult() {
+            @Override
+            public boolean getStarted() {
+                return false;
+            }
+
+            @Override
+            public int getUncheckedIn() {
+                return 0;
+            }
+
+            @Override
+            public int getJudgeCount() {
+                return 16;
+            }
+
+            @Override
+            public int getTeamCount() {
+                return 32;
+            }
+        });
+        when(tournamentRepository.findRound(53L, RoundGroupType.PRELIMINARY, 1)).thenReturn(firstRound);
+
+        tournamentService.startTournament(53L);
+
+        assertEquals(32, firstRound.getTeams().size());
+        assertEquals(true, tournament.getStarted());
+        verify(roundService).generateMatchesAndAssignJudges(firstRound);
     }
 
     private Tournament buildTournamentWithExistingTeamCount(int teamCount) {

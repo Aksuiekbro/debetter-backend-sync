@@ -21,6 +21,7 @@ public interface UserMapper {
     @Mapping(target = "password", ignore = true)
     User toUser(UserRegistrationDto dto);
 
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "username", ignore = true)
     void updateUser(UserUpdateDto dto, @MappingTarget User user);
 

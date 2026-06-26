@@ -95,18 +95,43 @@ public class UserService implements UserDetailsService {
     @Transactional
     public User updateUser(UserUpdateDto dto, Long userId) {
         User user = userRepository.findById(userId).orElseThrow(() -> new EntityNotFoundException("User not found"));
-        if(user.getRole() == Role.PARTICIPANT) {
-            ParticipantProfile profile = ((ParticipantProfile) user.getProfile());
-            profile.setCity(commonService.findOrCreateEntity(dto.city().name(), City.class, entityManager));
-            profile.setInstitution(commonService.findOrCreateEntity(dto.institution().name(), Institution.class, entityManager));
-        }
-        boolean error = false;
-        StringBuilder errorMessage = new StringBuilder();
-        if(passwordEncoder.matches(dto.oldPassword(), user.getPassword())) {
-            user.setPassword(passwordEncoder.encode(dto.newPassword()));
-        }
+        updateParticipantProfile(dto, user);
+        updatePassword(dto, user);
         userMapper.updateUser(dto, user);
         return user;
+    }
+
+    private void updateParticipantProfile(UserUpdateDto dto, User user) {
+        if (user.getRole() != Role.PARTICIPANT || !(user.getProfile() instanceof ParticipantProfile profile)) {
+            return;
+        }
+
+        if (hasText(dto.city() != null ? dto.city().name() : null)) {
+            profile.setCity(commonService.findOrCreateEntity(dto.city().name(), City.class, entityManager));
+        }
+        if (hasText(dto.institution() != null ? dto.institution().name() : null)) {
+            profile.setInstitution(commonService.findOrCreateEntity(dto.institution().name(), Institution.class, entityManager));
+        }
+    }
+
+    private void updatePassword(UserUpdateDto dto, User user) {
+        boolean hasOldPassword = hasText(dto.oldPassword());
+        boolean hasNewPassword = hasText(dto.newPassword());
+        if (!hasOldPassword && !hasNewPassword) {
+            return;
+        }
+        if (!hasOldPassword || !hasNewPassword) {
+            throw new IllegalArgumentException("Old and new password are required to change password");
+        }
+        if (!passwordEncoder.matches(dto.oldPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("Old password is incorrect");
+        }
+
+        user.setPassword(passwordEncoder.encode(dto.newPassword()));
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     @CacheEvict(value = "currentUser", key = "#userId")

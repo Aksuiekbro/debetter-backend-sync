@@ -3,6 +3,7 @@ package com.heliozz10.debetter.controller.tournament;
 import com.heliozz10.debetter.content.tournament.match.Match;
 import com.heliozz10.debetter.dto.common.out.PageableResult;
 import com.heliozz10.debetter.dto.tournament.match.in.MatchResultDto;
+import com.heliozz10.debetter.dto.tournament.match.in.MatchUpdateDto;
 import com.heliozz10.debetter.dto.tournament.match.out.MatchView;
 import com.heliozz10.debetter.mapper.tournament.MatchMapper;
 import com.heliozz10.debetter.service.tournament.MatchService;
@@ -40,6 +41,18 @@ public class MatchController {
                 matches.getTotalElements(),
                 matches.getTotalPages()
         );
+    }
+
+    @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #tournamentId)")
+    @PatchMapping("/{matchId}")
+    public MatchView updateMatch(
+            @PathVariable Long tournamentId,
+            @PathVariable Long roundGroupId,
+            @PathVariable Long roundId,
+            @PathVariable Long matchId,
+            @Valid @RequestBody MatchUpdateDto matchUpdateDto
+    ) {
+        return matchMapper.toMatchView(matchService.updateMatch(tournamentId, roundGroupId, roundId, matchId, matchUpdateDto));
     }
 
     @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #tournamentId)")

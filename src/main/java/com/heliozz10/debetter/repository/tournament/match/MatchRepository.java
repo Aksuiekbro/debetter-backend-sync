@@ -15,11 +15,29 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface MatchRepository extends JpaRepository<Match, Long> {
     @EntityGraph(value = "Match.forView", type = EntityGraph.EntityGraphType.LOAD)
     Page<Match> findByRoundId(Long roundId, Pageable pageable);
+
+    @EntityGraph(value = "Match.forView", type = EntityGraph.EntityGraphType.LOAD)
+    @Query("""
+        SELECT m FROM Match m
+        WHERE m.id = :matchId
+          AND m.round.id = :roundId
+          AND m.round.roundGroup.id = :roundGroupId
+          AND m.round.roundGroup.tournament.id = :tournamentId
+    """)
+    Optional<Match> findByTournamentRoundGroupRoundAndId(
+            @Param("tournamentId") Long tournamentId,
+            @Param("roundGroupId") Long roundGroupId,
+            @Param("roundId") Long roundId,
+            @Param("matchId") Long matchId
+    );
+
+    List<Match> findByRoundIdAndJudgeIsNullOrderByIdAsc(Long roundId);
 
     @Query("SELECT m FROM Match m WHERE m.team1 = :teamId OR m.team2 = :teamId OR m.team3 = :teamId OR m.team4 = :teamId")
     List<Match> findByTeamId(@Param("teamId") Long teamId);

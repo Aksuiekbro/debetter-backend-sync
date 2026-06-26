@@ -47,9 +47,6 @@ public interface RoundRepository extends JpaRepository<Round, Long> {
     """)
     boolean areAllMatchesCompleted(@Param("round") Round round);
 
-    @Query(value = "SELECT assign_judges_for_round(:roundId)", nativeQuery = true)
-    void assignJudgesForRound(@Param("roundId") Long roundId);
-
     Optional<Round> findByRoundGroup_Tournament_IdAndId(Long id, Long id1);
 
     List<Round> findByRoundGroup_Tournament_IdAndRoundGroup_Id(Long id, Long id1);
@@ -57,7 +54,7 @@ public interface RoundRepository extends JpaRepository<Round, Long> {
     @EntityGraph(value = "Round.forView", type = EntityGraph.EntityGraphType.LOAD)
     Optional<Round> findByRoundGroup_Tournament_IdAndRoundGroup_IdAndId(Long id, Long id1, Long id2);
 
-    @EntityGraph(attributePaths = {"roundGroup", "teams", "debaters", "matches"})
+    @EntityGraph(attributePaths = {"roundGroup"})
     @Query("""
         SELECT r FROM Round r
         WHERE r.roundGroup.tournament.id = :tournamentId

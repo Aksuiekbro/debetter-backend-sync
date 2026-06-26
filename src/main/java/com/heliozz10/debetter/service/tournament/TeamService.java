@@ -1,13 +1,23 @@
 package com.heliozz10.debetter.service.tournament;
 
 import com.heliozz10.debetter.content.tournament.DebateFormat;
+import com.heliozz10.debetter.content.tournament.TournamentParticipant;
 import com.heliozz10.debetter.content.tournament.team.Club;
 import com.heliozz10.debetter.content.tournament.team.Team;
+import com.heliozz10.debetter.content.user.User;
+import com.heliozz10.debetter.content.user.profile.ParticipantProfile;
+import com.heliozz10.debetter.content.user.profile.Profile;
+import com.heliozz10.debetter.content.user.role.TournamentRole;
+import com.heliozz10.debetter.dto.tournament.team.in.ParticipantSelectorDto;
 import com.heliozz10.debetter.dto.tournament.team.in.TeamUpdateOrganizerDto;
 import com.heliozz10.debetter.dto.tournament.team.in.TeamUpdateParticipantDto;
 import com.heliozz10.debetter.dto.tournament.team.out.TeamView;
 import com.heliozz10.debetter.mapper.tournament.TeamMapper;
+import com.heliozz10.debetter.repository.tournament.TournamentParticipantRepository;
 import com.heliozz10.debetter.repository.tournament.team.TeamRepository;
+import com.heliozz10.debetter.repository.user.UserRepository;
+import com.heliozz10.debetter.repository.user.profile.ParticipantProfileRepository;
+import com.heliozz10.debetter.security.tournament.TournamentSecurity;
 import com.heliozz10.debetter.service.CommonService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
@@ -23,6 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
 @RequiredArgsConstructor
@@ -32,10 +45,14 @@ public class TeamService {
 
     private final TeamRepository teamRepository;
     private final TeamMapper teamMapper;
+    private final ParticipantProfileRepository participantProfileRepository;
+    private final UserRepository userRepository;
+    private final TournamentParticipantRepository tournamentParticipantRepository;
 
     private final CommonService commonService;
 
     private final TournamentParticipantService tournamentParticipantService;
+    private final TournamentSecurity tournamentSecurity;
 
     @Transactional(readOnly = true)
     public Page<Team> getTeamsByTournamentId(Long tournamentId, Pageable pageable) {
@@ -71,7 +88,23 @@ public class TeamService {
         Team team = teamRepository.findByTournamentIdAndId(tournamentId, teamId)
                 .orElseThrow(() -> new EntityNotFoundException("Team not found"));
 
-        return teamRepository.updateNameById(teamUpdateOrganizerDto.name() != null ? teamUpdateOrganizerDto.name() : team.getName(), teamId);
+        if(StringUtils.hasText(teamUpdateOrganizerDto.name())) {
+            team.setName(teamUpdateOrganizerDto.name().trim());
+        }
+
+        if(teamUpdateOrganizerDto.club() != null) {
+            String clubName = teamUpdateOrganizerDto.club().trim();
+            team.setClub(clubName.isEmpty()
+                    ? null
+                    : commonService.findOrCreateEntity(clubName, Club.class, entityManager));
+        }
+
+        if(teamUpdateOrganizerDto.members() != null) {
+            replaceMembers(tournamentId, team, teamUpdateOrganizerDto.members());
+        }
+
+        teamRepository.save(team);
+        return 1;
     }
 
     @Transactional
@@ -108,5 +141,100 @@ public class TeamService {
 
     public int getMaxTeamSize(DebateFormat format) {
         return (format == DebateFormat.KP) ? 3 : 2;
+    }
+
+    private void replaceMembers(Long tournamentId, Team team, List<ParticipantSelectorDto> selectors) {
+        if(selectors.isEmpty()) {
+            throw new IllegalArgumentException("Team must have at least one participant");
+        }
+
+        int maxTeamSize = getMaxTeamSize(team.getTournament().getPreliminaryFormat());
+        if(selectors.size() > maxTeamSize) {
+            throw new IllegalArgumentException("Team can have at most " + maxTeamSize + " participants");
+        }
+
+        List<ParticipantProfile> desiredProfiles = resolveUniqueParticipantProfiles(selectors);
+        Map<Long, TournamentParticipant> currentByProfileId = new LinkedHashMap<>();
+        for(TournamentParticipant member : new ArrayList<>(team.getMembers())) {
+            currentByProfileId.put(member.getParticipantProfile().getId(), member);
+        }
+
+        for(ParticipantProfile profile : desiredProfiles) {
+            ensureParticipantAvailableForTeam(tournamentId, team, profile);
+        }
+
+        for(TournamentParticipant existingMember : new ArrayList<>(team.getMembers())) {
+            Long profileId = existingMember.getParticipantProfile().getId();
+            boolean shouldRemain = desiredProfiles.stream()
+                    .anyMatch(profile -> Objects.equals(profile.getId(), profileId));
+
+            if(!shouldRemain) {
+                team.getMembers().remove(existingMember);
+                tournamentSecurity.removeRoleFromUser(existingMember.getParticipantProfile().getUser().getId(), tournamentId, TournamentRole.VIEW);
+                tournamentParticipantRepository.delete(existingMember);
+            }
+        }
+
+        for(ParticipantProfile profile : desiredProfiles) {
+            if(currentByProfileId.containsKey(profile.getId())) {
+                continue;
+            }
+
+            TournamentParticipant participant = new TournamentParticipant();
+            participant.setTeam(team);
+            participant.setParticipantProfile(profile);
+            participant.setSpeakerScore(0);
+            team.getMembers().add(participant);
+            tournamentParticipantRepository.save(participant);
+            tournamentSecurity.assignRoleToUser(profile.getUser().getId(), tournamentId, TournamentRole.VIEW);
+        }
+
+        team.setActive(true);
+        team.setCheckedIn(false);
+    }
+
+    private List<ParticipantProfile> resolveUniqueParticipantProfiles(List<ParticipantSelectorDto> selectors) {
+        Map<Long, ParticipantProfile> profilesById = new LinkedHashMap<>();
+
+        for(ParticipantSelectorDto selector : selectors) {
+            ParticipantProfile profile = resolveParticipantProfile(selector);
+
+            if(profilesById.putIfAbsent(profile.getId(), profile) != null) {
+                throw new IllegalArgumentException("A participant cannot be listed twice in the same team");
+            }
+        }
+
+        return new ArrayList<>(profilesById.values());
+    }
+
+    private ParticipantProfile resolveParticipantProfile(ParticipantSelectorDto selector) {
+        Profile profile;
+
+        if(selector.id() != null) {
+            profile = participantProfileRepository.findById(selector.id())
+                    .orElseThrow(() -> new EntityNotFoundException("Participant not found"));
+        } else if(StringUtils.hasText(selector.username())) {
+            User user = userRepository.findByUsername(selector.username())
+                    .orElseThrow(() -> new EntityNotFoundException("Participant not found"));
+            profile = user.getProfile();
+        } else {
+            throw new IllegalArgumentException("Invalid participant selector");
+        }
+
+        if(!(profile instanceof ParticipantProfile participantProfile)) {
+            throw new IllegalArgumentException("Trying to add a non-participant profile");
+        }
+
+        return participantProfile;
+    }
+
+    private void ensureParticipantAvailableForTeam(Long tournamentId, Team team, ParticipantProfile profile) {
+        tournamentParticipantRepository
+                .findByTeam_Tournament_IdAndParticipantProfile_Id(tournamentId, profile.getId())
+                .ifPresent(existingParticipant -> {
+                    if(!Objects.equals(existingParticipant.getTeam().getId(), team.getId())) {
+                        throw new IllegalArgumentException("Participant is already registered for another team in this tournament");
+                    }
+                });
     }
 }

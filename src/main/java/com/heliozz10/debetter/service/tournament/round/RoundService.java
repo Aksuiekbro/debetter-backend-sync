@@ -1,6 +1,7 @@
 package com.heliozz10.debetter.service.tournament.round;
 
 import com.heliozz10.debetter.content.tournament.DebateFormat;
+import com.heliozz10.debetter.content.tournament.Judge;
 import com.heliozz10.debetter.content.tournament.TournamentParticipant;
 import com.heliozz10.debetter.content.tournament.match.DebaterMatchupHistory;
 import com.heliozz10.debetter.content.tournament.match.Match;
@@ -9,6 +10,7 @@ import com.heliozz10.debetter.content.tournament.round.Round;
 import com.heliozz10.debetter.content.tournament.team.Team;
 import com.heliozz10.debetter.dto.tournament.round.in.RoundUpdateDto;
 import com.heliozz10.debetter.mapper.tournament.round.RoundMapper;
+import com.heliozz10.debetter.repository.tournament.JudgeRepository;
 import com.heliozz10.debetter.repository.tournament.match.DebaterMatchupHistoryRepository;
 import com.heliozz10.debetter.repository.tournament.match.MatchRepository;
 import com.heliozz10.debetter.repository.tournament.match.TeamMatchupHistoryRepository;
@@ -30,6 +32,7 @@ public class RoundService {
     private final RoundMapper roundMapper;
 
     private final MatchRepository matchRepository;
+    private final JudgeRepository judgeRepository;
 
     private final TeamMatchupHistoryRepository teamMatchupHistoryRepository;
     private final DebaterMatchupHistoryRepository debaterMatchupHistoryRepository;
@@ -328,7 +331,31 @@ public class RoundService {
 
     @Transactional
     public void assignJudges(Round round) {
-        roundRepository.assignJudgesForRound(round.getId());
+        Long tournamentId = round.getRoundGroup().getTournament().getId();
+        List<Judge> judges = judgeRepository.findByTournamentIdAndCheckedInTrueOrderByTimesJudgedAscIdAsc(tournamentId);
+        if (judges.isEmpty()) {
+            return;
+        }
+
+        List<Match> matches = matchRepository.findByRoundIdAndJudgeIsNullOrderByIdAsc(round.getId());
+        if (matches.isEmpty()) {
+            return;
+        }
+
+        Map<Judge, Integer> assignmentCounts = new HashMap<>();
+        for (int i = 0; i < matches.size(); i++) {
+            Judge judge = judges.get(i % judges.size());
+            matches.get(i).setJudge(judge);
+            assignmentCounts.merge(judge, 1, Integer::sum);
+        }
+
+        assignmentCounts.forEach((judge, count) -> {
+            int previousCount = Optional.ofNullable(judge.getTimesJudged()).orElse(0);
+            judge.setTimesJudged(previousCount + count);
+        });
+
+        matchRepository.saveAll(matches);
+        judgeRepository.saveAll(judges);
     }
 
     public void setTeams(Round round, List<Team> teams) {

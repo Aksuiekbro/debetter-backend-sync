@@ -13,4 +13,6 @@ public interface JudgeRepository extends JpaRepository<Judge, Long>, JpaSpecific
     List<Judge> findByTournamentId(Long tournamentId);
 
     Optional<Judge> findByTournamentIdAndId(Long tournamentId, Long id);
+
+    List<Judge> findByTournamentIdAndCheckedInTrueOrderByTimesJudgedAscIdAsc(Long tournamentId);
 }

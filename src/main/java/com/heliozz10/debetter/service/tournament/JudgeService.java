@@ -44,6 +44,10 @@ public class JudgeService {
 
     @Transactional
     public Judge addJudgeToTournament(JudgeFormDto judgeFormDto, Long tournamentId) {
+        if (judgeFormDto.fullName() == null || judgeFormDto.fullName().isBlank()) {
+            throw new IllegalArgumentException("Judge full name is required");
+        }
+
         Tournament tournament = tournamentRepository.getReferenceById(tournamentId);
 
         Judge judge = judgeMapper.toJudge(judgeFormDto);

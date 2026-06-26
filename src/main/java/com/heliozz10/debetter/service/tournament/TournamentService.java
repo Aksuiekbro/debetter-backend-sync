@@ -471,6 +471,7 @@ public class TournamentService {
         firstRound.getRoundGroup().getTournament().setStarted(true);
 
         setTeamsOfFirstRound(firstRound);
+        roundService.generateMatchesAndAssignJudges(firstRound);
     }
 
     private void setTeamsOfFirstRound(Round round) {

@@ -2,6 +2,11 @@ package com.heliozz10.debetter.service.user;
 
 import com.heliozz10.debetter.content.user.Role;
 import com.heliozz10.debetter.dto.user.in.UserRegistrationDto;
+import com.heliozz10.debetter.content.user.User;
+import com.heliozz10.debetter.content.user.profile.City;
+import com.heliozz10.debetter.content.user.profile.ParticipantProfile;
+import com.heliozz10.debetter.content.user.profile.institution.Institution;
+import com.heliozz10.debetter.dto.user.in.UserUpdateDto;
 import com.heliozz10.debetter.mapper.user.UserMapper;
 import com.heliozz10.debetter.repository.user.UserRepository;
 import com.heliozz10.debetter.repository.user.profile.CityRepository;
@@ -18,6 +23,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -99,5 +106,65 @@ class UserServiceTest {
         assertEquals("Username or email already exists", exception.getMessage());
         verify(userRepository, never()).save(any());
         verifyNoInteractions(userMapper, passwordEncoder, organizerProfileService, participantProfileService);
+    }
+
+    @Test
+    void updateUserAllowsParticipantPartialUpdateWithoutProfileFieldsOrPassword() {
+        User user = participantUser();
+        UserUpdateDto dto = new UserUpdateDto(
+                null,
+                null,
+                null,
+                "new-email@example.com",
+                "New",
+                "Name",
+                null,
+                null
+        );
+        when(userRepository.findById(42L)).thenReturn(Optional.of(user));
+
+        User updated = userService.updateUser(dto, 42L);
+
+        assertEquals(user, updated);
+        verify(userMapper).updateUser(dto, user);
+        verifyNoInteractions(commonService, passwordEncoder);
+    }
+
+    @Test
+    void updateUserRejectsWrongOldPasswordInsteadOfSilentlyIgnoringPasswordChange() {
+        User user = participantUser();
+        UserUpdateDto dto = new UserUpdateDto(
+                null,
+                "wrong-password",
+                "new-password",
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+        when(userRepository.findById(42L)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong-password", "encoded-old-password")).thenReturn(false);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> userService.updateUser(dto, 42L)
+        );
+
+        assertEquals("Old password is incorrect", exception.getMessage());
+        verify(userMapper, never()).updateUser(any(), any());
+    }
+
+    private User participantUser() {
+        User user = new User();
+        user.setId(42L);
+        user.setUsername("participant");
+        user.setPassword("encoded-old-password");
+        user.setEmail("participant@example.com");
+        user.setFirstName("Part");
+        user.setLastName("Icipant");
+        user.setRole(Role.PARTICIPANT);
+        user.setProfile(new ParticipantProfile(new City("Astana"), new Institution("NIS")));
+        return user;
     }
 }
