@@ -7,7 +7,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -59,10 +58,9 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
     @Query("SELECT m.round.roundGroup FROM Match m WHERE m.id = :matchId")
     RoundGroup findRoundGroupByMatchId(@Param("matchId") Long matchId);
 
-    @Modifying
     @Transactional
     @Query(value = "SELECT update_match_scores_bulk(CAST(:resultsJson AS jsonb))", nativeQuery = true)
-    void updateMatchScoresBulk(@Param("resultsJson") String resultsJson);
+    Object updateMatchScoresBulk(@Param("resultsJson") String resultsJson);
 
     /**
      * Needed for ownership check
