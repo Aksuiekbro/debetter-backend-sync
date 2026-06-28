@@ -6,5 +6,5 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 public record ParticipantScoreDto (
         @NotNull @Positive Long participantId,
-        @NotNull Integer score
+        @NotNull @PositiveOrZero Integer score
 ) {}

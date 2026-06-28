@@ -24,6 +24,7 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 @RequiredArgsConstructor
 @Service
@@ -36,6 +37,33 @@ public class RoundService {
 
     private final TeamMatchupHistoryRepository teamMatchupHistoryRepository;
     private final DebaterMatchupHistoryRepository debaterMatchupHistoryRepository;
+
+    @Transactional(readOnly = true)
+    public List<Team> getMatchWinnerTeams(Long roundId) {
+        return matchRepository.findByRoundId(roundId).stream()
+                .flatMap(match -> Stream.of(
+                        Boolean.TRUE.equals(match.getTeam1Won()) ? match.getTeam1() : null,
+                        Boolean.TRUE.equals(match.getTeam2Won()) ? match.getTeam2() : null,
+                        Boolean.TRUE.equals(match.getTeam3Won()) ? match.getTeam3() : null,
+                        Boolean.TRUE.equals(match.getTeam4Won()) ? match.getTeam4() : null
+                ))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<TournamentParticipant> getMatchWinnerDebaters(Long roundId) {
+        return matchRepository.findByRoundId(roundId).stream()
+                .map(match -> {
+                    if (match.getDebater1Score() != null && match.getDebater2Score() != null) {
+                        return match.getDebater1Score() >= match.getDebater2Score()
+                                ? match.getDebater1() : match.getDebater2();
+                    }
+                    return match.getDebater1Score() != null ? match.getDebater1() : match.getDebater2();
+                })
+                .filter(Objects::nonNull)
+                .toList();
+    }
 
     @Transactional(readOnly = true)
     public List<Round> getRoundsByTournamentIdAndRoundGroupId(Long tournamentId, Long roundGroupId) {

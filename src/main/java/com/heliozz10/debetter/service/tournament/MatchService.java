@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @RequiredArgsConstructor
@@ -191,24 +192,36 @@ public class MatchService {
 
     //TODO: fix this, this doesnt set the scores for the teams and debaters, it only sets the scores for the matches. Already done but keeping the todo
     @Transactional
-    public void submitMatchResults(Long tournamentId, Collection<MatchResultDto> results) {
+    public void submitMatchResults(Long tournamentId, Long roundGroupId, Long roundId, Collection<MatchResultDto> results) {
         if(results == null || results.isEmpty()) {
             return;
         }
 
-        List<Long> matchIds = results.stream()
+        List<Long> allMatchIds = results.stream()
                 .map(MatchResultDto::matchId)
                 .filter(Objects::nonNull)
-                .distinct()
                 .toList();
+
+        List<Long> matchIds = allMatchIds.stream().distinct().toList();
 
         if(matchIds.isEmpty()) {
             return;
         }
 
-        if(matchRepository.countMatchesInTournament(tournamentId, matchIds) != matchIds.size()) {
-            throw new IllegalArgumentException("Some match results do not belong to this tournament.");
+        if(matchIds.size() != allMatchIds.size()) {
+            throw new IllegalArgumentException("Duplicate match IDs in the submission.");
         }
+
+        if(matchRepository.countMatchesInRound(tournamentId, roundGroupId, roundId, matchIds) != matchIds.size()) {
+            throw new IllegalArgumentException("Some match results do not belong to the specified round.");
+        }
+
+        if(matchRepository.countCompletedMatches(matchIds) > 0) {
+            throw new IllegalStateException("Cannot re-submit results for already completed matches.");
+        }
+
+        Map<Long, Match> matchesById = matchRepository.findAllById(matchIds).stream()
+                .collect(Collectors.toMap(Match::getId, m -> m));
 
         ArrayNode arrayNode = objectMapper.createArrayNode();
 
@@ -216,39 +229,68 @@ public class MatchService {
             ObjectNode objectNode = objectMapper.createObjectNode();
 
             objectNode.put("tournament_id", tournamentId);
-
             objectNode.put("match_id", result.matchId());
 
-            for (int i = 0; i < 4; i++) {
-                Integer score = null;
-                Boolean won = null;
-                if (result.teamResults() != null && i < result.teamResults().size()) {
-                    var teamResult = result.teamResults().get(i);
+            Match match = matchesById.get(result.matchId());
+            Map<Long, Integer> teamSlotByTeamId = new HashMap<>();
+            if (match != null) {
+                if (match.getTeam1() != null) teamSlotByTeamId.put(match.getTeam1().getId(), 1);
+                if (match.getTeam2() != null) teamSlotByTeamId.put(match.getTeam2().getId(), 2);
+                if (match.getTeam3() != null) teamSlotByTeamId.put(match.getTeam3().getId(), 3);
+                if (match.getTeam4() != null) teamSlotByTeamId.put(match.getTeam4().getId(), 4);
+            }
+
+            Integer[] teamScores = new Integer[4];
+            Boolean[] teamWons = new Boolean[4];
+
+            if (result.teamResults() != null) {
+                for (var teamResult : result.teamResults()) {
+                    Integer slot = teamSlotByTeamId.get(teamResult.teamId());
+                    if (slot == null) continue;
+                    int idx = slot - 1;
                     List<ParticipantScoreDto> ps = teamResult.participantScores();
-                    score = ps.stream()
+                    teamScores[idx] = ps.stream()
                             .map(ParticipantScoreDto::score)
                             .filter(Objects::nonNull)
                             .reduce(0, Integer::sum);
-                    won = teamResult.won();
+                    teamWons[idx] = teamResult.won();
                 }
-                // Positional mapping (teamResults[i] -> team{i+1}), matching the frontend payload order.
-                objectNode.put("team" + (i + 1) + "score", score);
-                objectNode.put("team" + (i + 1) + "won", won);
             }
 
-            for (int i = 0; i < 2; i++) {
-                String fieldName = "debater" + (i + 1) + "score";
-                Integer score = null;
-                if (result.participantScores() != null && i < result.participantScores().size()) {
-                    score = result.participantScores().get(i).score();
-                }
-                objectNode.put(fieldName, score);
+            for (int i = 0; i < 4; i++) {
+                objectNode.put("team" + (i + 1) + "score", teamScores[i]);
+                objectNode.put("team" + (i + 1) + "won", teamWons[i]);
             }
+
+            Map<Long, Integer> debaterScoreById = new HashMap<>();
+            if (result.participantScores() != null) {
+                result.participantScores().forEach(ps -> {
+                    if (ps.participantId() != null && ps.score() != null) {
+                        debaterScoreById.put(ps.participantId(), ps.score());
+                    }
+                });
+            }
+            Long debater1Id = match != null && match.getDebater1() != null ? match.getDebater1().getId() : null;
+            Long debater2Id = match != null && match.getDebater2() != null ? match.getDebater2().getId() : null;
+            objectNode.put("debater1score", debater1Id != null ? debaterScoreById.get(debater1Id) : null);
+            objectNode.put("debater2score", debater2Id != null ? debaterScoreById.get(debater2Id) : null);
 
             arrayNode.add(objectNode);
         });
 
         String json = arrayNode.toString();
         matchRepository.updateMatchScoresBulk(json);
+
+        results.forEach(result -> {
+            if (result.teamResults() == null) return;
+            result.teamResults().forEach(teamResult -> {
+                if (teamResult.participantScores() == null) return;
+                teamResult.participantScores().forEach(ps -> {
+                    if (ps.participantId() != null && ps.score() != null) {
+                        tournamentParticipantRepository.addSpeakerScore(ps.participantId(), ps.score());
+                    }
+                });
+            });
+        });
     }
 }

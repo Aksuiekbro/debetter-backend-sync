@@ -36,6 +36,8 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
             @Param("matchId") Long matchId
     );
 
+    List<Match> findByRoundId(Long roundId);
+
     List<Match> findByRoundIdAndJudgeIsNullOrderByIdAsc(Long roundId);
 
     @Query("SELECT m FROM Match m WHERE m.team1 = :teamId OR m.team2 = :teamId OR m.team3 = :teamId OR m.team4 = :teamId")
@@ -79,4 +81,25 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
     """)
     long countMatchesInTournament(@Param("tournamentId") Long tournamentId,
                                   @Param("matchIds") List<Long> matchIds);
+
+    @Query("""
+        SELECT COUNT(m)
+        FROM Match m
+        WHERE m.id IN :matchIds
+          AND m.completed = true
+    """)
+    long countCompletedMatches(@Param("matchIds") List<Long> matchIds);
+
+    @Query("""
+        SELECT COUNT(m)
+        FROM Match m
+        WHERE m.round.id = :roundId
+          AND m.round.roundGroup.id = :roundGroupId
+          AND m.round.roundGroup.tournament.id = :tournamentId
+          AND m.id IN :matchIds
+    """)
+    long countMatchesInRound(@Param("tournamentId") Long tournamentId,
+                             @Param("roundGroupId") Long roundGroupId,
+                             @Param("roundId") Long roundId,
+                             @Param("matchIds") List<Long> matchIds);
 }

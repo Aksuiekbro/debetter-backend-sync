@@ -59,9 +59,11 @@ public class MatchController {
     @PatchMapping("/results")
     public void submitMatchResults(
             @PathVariable Long tournamentId,
+            @PathVariable Long roundGroupId,
+            @PathVariable Long roundId,
             @Valid @RequestBody List<MatchResultDto> matchResultDto
     ) {
-        matchService.submitMatchResults(tournamentId, matchResultDto);
+        matchService.submitMatchResults(tournamentId, roundGroupId, roundId, matchResultDto);
     }
 
     @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #tournamentId)")

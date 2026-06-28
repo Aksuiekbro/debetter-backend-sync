@@ -104,23 +104,13 @@ public class RoundGroupService {
                 .orElseThrow(() -> new EntityNotFoundException("Next round not found"));
 
         if(roundGroup.getType() == RoundGroupType.TEAM_ELIMINATION) {
-
-            List<Team> topTeams = currentRound.getTeams().stream()
-                    .sorted(Comparator.comparing(Team::getPreliminaryScore).reversed())
-                    .limit(numberOfEntrants)
-                    .toList();
-
-            roundService.setTeams(nextRound, topTeams);
+            List<Team> winners = roundService.getMatchWinnerTeams(currentRound.getId());
+            roundService.setTeams(nextRound, winners);
         }
 
         if(roundGroup.getType() == RoundGroupType.SOLO_ELIMINATION) {
-            List<TournamentParticipant> debaters = roundRepository.findDebatersByRoundId(currentRound.getId());
-            List<TournamentParticipant> topDebaters = currentRound.getDebaters().stream()
-                    .sorted(Comparator.comparing(TournamentParticipant::getSpeakerScore).reversed())
-                    .limit(numberOfEntrants)
-                    .toList();
-
-            roundService.setDebaters(nextRound, topDebaters);
+            List<TournamentParticipant> winners = roundService.getMatchWinnerDebaters(currentRound.getId());
+            roundService.setDebaters(nextRound, winners);
         }
 
         roundService.generateMatchesAndAssignJudges(nextRound);
@@ -145,7 +135,7 @@ public class RoundGroupService {
         int numberOfEntrants = (int)Math.pow(2, teamEliminationRoundGroup.getRounds().size());
 
         List<Team> topTeams = teamRepository.findByTournamentAndDisqualifiedFalse(tournament).stream()
-                .sorted(Comparator.comparing(Team::getPreliminaryScore).reversed())
+                .sorted(Comparator.comparing(Team::getPreliminaryScore, Comparator.nullsFirst(Comparator.naturalOrder())).reversed())
                 .limit(numberOfEntrants)
                 .toList();
 
@@ -155,6 +145,9 @@ public class RoundGroupService {
 
         roundService.setTeams(teamEliminationFirstRound, topTeams);
 
+        teamEliminationRoundGroup.setCurrentRoundNumber(1);
+        roundGroupRepository.save(teamEliminationRoundGroup);
+
         RoundGroup soloEliminationRoundGroup = tournament.getRoundGroups().stream().filter(roundGroup -> roundGroup.getType() == RoundGroupType.SOLO_ELIMINATION).findFirst()
                 .orElseThrow(() -> new EntityNotFoundException("Solo elimination round group not found"));
 
@@ -162,7 +155,7 @@ public class RoundGroupService {
                 .orElseThrow(() -> new EntityNotFoundException("Solo elimination first round not found"));
 
         List<TournamentParticipant> topDebaters = tournament.getTeams().stream().flatMap(team -> team.getMembers().stream())
-                .sorted(Comparator.comparing(TournamentParticipant::getSpeakerScore).reversed())
+                .sorted(Comparator.comparing(TournamentParticipant::getSpeakerScore, Comparator.nullsFirst(Comparator.naturalOrder())).reversed())
                 .limit(numberOfEntrants)
                 .toList();
 
@@ -171,5 +164,8 @@ public class RoundGroupService {
         }
 
         roundService.setDebaters(soloEliminationFirstRound, topDebaters);
+
+        soloEliminationRoundGroup.setCurrentRoundNumber(1);
+        roundGroupRepository.save(soloEliminationRoundGroup);
     }
 }

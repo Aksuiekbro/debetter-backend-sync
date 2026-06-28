@@ -107,7 +107,7 @@ public class AnnouncementService {
     public Announcement updateAnnouncement(AnnouncementFormDto announcementFormDto, MultipartFile image, Long tournamentId, Long announcementId, Long editorId) {
         Announcement announcement = updateLastEdited(announcementId, editorId);
 
-        if(announcement.getTournament().getId() != tournamentId) {
+        if(!Objects.equals(announcement.getTournament().getId(), tournamentId)) {
             throw new EntityNotFoundException("Announcement not found");
         }
 

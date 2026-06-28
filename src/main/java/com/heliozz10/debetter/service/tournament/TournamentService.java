@@ -177,7 +177,7 @@ public class TournamentService {
         RoundGroup soloEliminationRoundGroup = new RoundGroup(tournament, RoundGroupType.SOLO_ELIMINATION, DebateFormat.LD);
         roundGroups.add(soloEliminationRoundGroup);
         for(int i = 0; i < eliminationRoundCount; i++) {
-            Round soloEliminationRound = new Round(soloEliminationRoundGroup, i == eliminationRoundCount - 1 ? "Final" : "1/" + Math.pow(2, (eliminationRoundCount - 1 - i)), i + 1);
+            Round soloEliminationRound = new Round(soloEliminationRoundGroup, i == eliminationRoundCount - 1 ? "Final" : "1/" + (int) Math.pow(2, (eliminationRoundCount - 1 - i)), i + 1);
             rounds.add(soloEliminationRound);
             soloEliminationRound.setRoundGroup(soloEliminationRoundGroup);
         }
@@ -185,7 +185,7 @@ public class TournamentService {
         RoundGroup teamEliminationRoundGroup = new RoundGroup(tournament, RoundGroupType.TEAM_ELIMINATION, tournament.getTeamEliminationFormat());
         roundGroups.add(teamEliminationRoundGroup);
         for(int i = 0; i < eliminationRoundCount; i++) {
-            Round teamEliminationRound = new Round(teamEliminationRoundGroup, i == eliminationRoundCount - 1 ? "Final" : "1/" + Math.pow(2, (eliminationRoundCount - 1 - i)), i + 1);
+            Round teamEliminationRound = new Round(teamEliminationRoundGroup, i == eliminationRoundCount - 1 ? "Final" : "1/" + (int) Math.pow(2, (eliminationRoundCount - 1 - i)), i + 1);
             rounds.add(teamEliminationRound);
             teamEliminationRound.setRoundGroup(teamEliminationRoundGroup);
         }

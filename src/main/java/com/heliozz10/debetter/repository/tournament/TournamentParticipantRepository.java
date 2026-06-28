@@ -7,7 +7,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -25,4 +27,8 @@ public interface TournamentParticipantRepository extends JpaRepository<Tournamen
     Optional<TournamentParticipant> findByTeam_Tournament_IdAndParticipantProfile_Id(Long tournamentId, Long participantProfileId);
 
     boolean existsByTeam_Tournament_IdAndParticipantProfile_Id(Long tournamentId, Long participantProfileId);
+
+    @Modifying
+    @Query("UPDATE TournamentParticipant tp SET tp.speakerScore = COALESCE(tp.speakerScore, 0) + :delta WHERE tp.id = :participantId")
+    void addSpeakerScore(@Param("participantId") Long participantId, @Param("delta") int delta);
 }

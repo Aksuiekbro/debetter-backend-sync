@@ -40,10 +40,10 @@ public interface RoundRepository extends JpaRepository<Round, Long> {
     void changeRoundFormat(@Param("roundId") Long roundId, @Param("format") DebateFormat format);
 
     @Query("""
-        SELECT CASE WHEN COUNT(m) = 0 THEN true ELSE false END
+        SELECT CASE WHEN COUNT(m) > 0 AND SUM(CASE WHEN m.completed = false THEN 1 ELSE 0 END) = 0
+                    THEN true ELSE false END
         FROM Match m
         WHERE m.round = :round
-          AND m.completed = false
     """)
     boolean areAllMatchesCompleted(@Param("round") Round round);
 

@@ -99,19 +99,19 @@ class MatchServiceTest {
     }
 
     @Test
-    void submitMatchResultsRejectsMatchesOutsideTournament() {
+    void submitMatchResultsRejectsMatchesOutsideRound() {
         List<MatchResultDto> results = List.of(
                 new MatchResultDto(301L, List.of(), null),
                 new MatchResultDto(999L, List.of(), null)
         );
-        when(matchRepository.countMatchesInTournament(53L, List.of(301L, 999L))).thenReturn(1L);
+        when(matchRepository.countMatchesInRound(53L, 101L, 201L, List.of(301L, 999L))).thenReturn(1L);
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> matchService.submitMatchResults(53L, results)
+                () -> matchService.submitMatchResults(53L, 101L, 201L, results)
         );
 
-        assertEquals("Some match results do not belong to this tournament.", exception.getMessage());
+        assertEquals("Some match results do not belong to the specified round.", exception.getMessage());
         verify(matchRepository, never()).updateMatchScoresBulk(org.mockito.ArgumentMatchers.anyString());
     }
 
