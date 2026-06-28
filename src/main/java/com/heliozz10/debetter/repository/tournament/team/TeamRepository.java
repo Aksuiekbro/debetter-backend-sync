@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +24,8 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
     @EntityGraph(value = "Team.full", type = EntityGraph.EntityGraphType.LOAD)
     Page<Team> findByTournamentId(Long tournamentId, Pageable pageable);
 
-    List<Team> findByTournamentAndDisqualifiedFalse(Tournament tournament);
+    @Query("SELECT t FROM Team t WHERE t.tournament = :tournament AND (t.disqualified = false OR t.disqualified IS NULL)")
+    List<Team> findByTournamentAndDisqualifiedFalse(@Param("tournament") Tournament tournament);
 
     List<Team> findByClubId(Long clubId);
 

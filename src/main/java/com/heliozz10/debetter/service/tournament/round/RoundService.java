@@ -266,9 +266,12 @@ public class RoundService {
 
     /** -------- History loading -------- */
     private Map<Long, TeamMatchupHistory> loadTeamHistoryData(List<?> teams) {
-        @SuppressWarnings("unchecked")
-        List<Team> tlist = (List<Team>) teams;
+        List<Team> tlist = teams == null ? List.of() : teams.stream()
+                .filter(Objects::nonNull)
+                .map(Team.class::cast)
+                .toList();
         Map<Long, TeamMatchupHistory> map = new HashMap<>();
+        if (tlist.isEmpty()) return map;
         for (TeamMatchupHistory h : teamMatchupHistoryRepository.findByTeam1InAndTeam2In(tlist, tlist)) {
             map.put(key(h.getTeam1().getId(), h.getTeam2().getId()), h);
         }
@@ -276,9 +279,12 @@ public class RoundService {
     }
 
     private Map<Long, DebaterMatchupHistory> loadDebaterHistoryData(List<?> debaters) {
-        @SuppressWarnings("unchecked")
-        List<TournamentParticipant> dlist = (List<TournamentParticipant>) debaters;
+        List<TournamentParticipant> dlist = debaters == null ? List.of() : debaters.stream()
+                .filter(Objects::nonNull)
+                .map(TournamentParticipant.class::cast)
+                .toList();
         Map<Long, DebaterMatchupHistory> map = new HashMap<>();
+        if (dlist.isEmpty()) return map;
         for (DebaterMatchupHistory h : debaterMatchupHistoryRepository.findByDebater1InAndDebater2In(dlist, dlist)) {
             map.put(key(h.getDebater1().getId(), h.getDebater2().getId()), h);
         }
