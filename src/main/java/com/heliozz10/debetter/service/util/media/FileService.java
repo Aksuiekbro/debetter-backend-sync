@@ -73,7 +73,7 @@ public class FileService {
     }
 
     public Path resolveFilePathByUrl(String url) {
-        Url entity = urlRepository.findByUrl(url)
+        Url entity = urlRepository.findFirstByUrlOrderByIdAsc(url)
                 .orElseThrow(() -> new IllegalArgumentException("File not found for URL: " + url));
         return Paths.get(getStoragePathFromUrl(entity));
     }
