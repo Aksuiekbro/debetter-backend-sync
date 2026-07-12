@@ -7,10 +7,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.LockModeType;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,6 +39,10 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
     );
 
     List<Match> findByRoundId(Long roundId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Match m WHERE m.id IN :matchIds")
+    List<Match> findAllByIdForUpdate(@Param("matchIds") List<Long> matchIds);
 
     List<Match> findByRoundIdAndJudgeIsNullOrderByIdAsc(Long roundId);
 

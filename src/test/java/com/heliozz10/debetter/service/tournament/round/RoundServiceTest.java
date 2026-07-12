@@ -162,6 +162,73 @@ class RoundServiceTest {
         verify(judgeRepository).saveAll(List.of(firstJudge, secondJudge));
     }
 
+    @Test
+    void getMatchWinnerTeamsAdvancesOneWinnerFromCompletedApfEliminationMatch() {
+        Team team1 = team(1L);
+        Team team2 = team(2L);
+        Match match = completedTeamMatch(DebateFormat.APF, team1, team2);
+        match.setTeam1Won(true);
+        match.setTeam2Won(false);
+        when(matchRepository.findByRoundId(201L)).thenReturn(List.of(match));
+
+        List<Team> winners = roundService.getMatchWinnerTeams(201L);
+
+        assertEquals(List.of(team1), winners);
+    }
+
+    @Test
+    void getMatchWinnerTeamsAdvancesTwoWinnersFromCompletedBpfEliminationMatch() {
+        Team team1 = team(1L);
+        Team team2 = team(2L);
+        Team team3 = team(3L);
+        Team team4 = team(4L);
+        Match match = completedTeamMatch(DebateFormat.BPF, team1, team2, team3, team4);
+        match.setTeam1Won(true);
+        match.setTeam2Won(false);
+        match.setTeam3Won(true);
+        match.setTeam4Won(false);
+        when(matchRepository.findByRoundId(201L)).thenReturn(List.of(match));
+
+        List<Team> winners = roundService.getMatchWinnerTeams(201L);
+
+        assertEquals(List.of(team1, team3), winners);
+    }
+
+    @Test
+    void getMatchWinnerTeamsRejectsCompletedBpfMatchWithoutTwoWinners() {
+        Match match = completedTeamMatch(
+                DebateFormat.BPF,
+                team(1L), team(2L), team(3L), team(4L)
+        );
+        match.setTeam1Won(true);
+        match.setTeam2Won(false);
+        match.setTeam3Won(false);
+        match.setTeam4Won(false);
+        when(matchRepository.findByRoundId(201L)).thenReturn(List.of(match));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> roundService.getMatchWinnerTeams(201L)
+        );
+
+        assertEquals("A completed BPF match must have exactly 2 winners.", exception.getMessage());
+    }
+
+    @Test
+    void getMatchWinnerTeamsRejectsCompletedApfMatchWithMissingWinnerFlag() {
+        Match match = completedTeamMatch(DebateFormat.APF, team(1L), team(2L));
+        match.setTeam1Won(true);
+        match.setTeam2Won(null);
+        when(matchRepository.findByRoundId(201L)).thenReturn(List.of(match));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> roundService.getMatchWinnerTeams(201L)
+        );
+
+        assertEquals("A completed APF match must have exactly 1 winner.", exception.getMessage());
+    }
+
     private static Round pairingRound() {
         Tournament tournament = new Tournament();
         tournament.setId(53L);
@@ -187,6 +254,29 @@ class RoundServiceTest {
         Team team = new Team();
         team.setId(id);
         return team;
+    }
+
+    private static Match completedTeamMatch(DebateFormat format, Team... teams) {
+        Tournament tournament = new Tournament();
+        tournament.setId(53L);
+
+        RoundGroup roundGroup = new RoundGroup();
+        roundGroup.setTournament(tournament);
+        roundGroup.setType(RoundGroupType.TEAM_ELIMINATION);
+        roundGroup.setFormat(format);
+
+        Round round = new Round();
+        round.setId(201L);
+        round.setRoundGroup(roundGroup);
+
+        Match match = new Match();
+        match.setCompleted(true);
+        match.setRound(round);
+        if(teams.length > 0) match.setTeam1(teams[0]);
+        if(teams.length > 1) match.setTeam2(teams[1]);
+        if(teams.length > 2) match.setTeam3(teams[2]);
+        if(teams.length > 3) match.setTeam4(teams[3]);
+        return match;
     }
 
     private static Judge judge(Long id, Integer timesJudged) {

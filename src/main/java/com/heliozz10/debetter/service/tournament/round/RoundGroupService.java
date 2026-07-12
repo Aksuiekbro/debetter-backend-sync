@@ -3,14 +3,16 @@ package com.heliozz10.debetter.service.tournament.round;
 import com.heliozz10.debetter.content.tournament.DebateFormat;
 import com.heliozz10.debetter.content.tournament.Tournament;
 import com.heliozz10.debetter.content.tournament.TournamentParticipant;
+import com.heliozz10.debetter.content.tournament.match.Match;
+import com.heliozz10.debetter.content.tournament.match.MatchParticipantScore;
 import com.heliozz10.debetter.content.tournament.round.Round;
 import com.heliozz10.debetter.content.tournament.round.RoundGroup;
 import com.heliozz10.debetter.content.tournament.round.RoundGroupType;
 import com.heliozz10.debetter.content.tournament.team.Team;
-import com.heliozz10.debetter.repository.tournament.TournamentParticipantRepository;
 import com.heliozz10.debetter.repository.tournament.round.RoundGroupRepository;
 import com.heliozz10.debetter.repository.tournament.round.RoundRepository;
 import com.heliozz10.debetter.repository.tournament.team.TeamRepository;
+import com.heliozz10.debetter.service.tournament.MatchParticipantScorePolicy;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @RequiredArgsConstructor
 @Service
@@ -29,8 +36,6 @@ public class RoundGroupService {
     private final RoundRepository roundRepository;
 
     private final TeamRepository teamRepository;
-    private final TournamentParticipantRepository tournamentParticipantRepository;
-
     @Transactional(readOnly = true)
     public List<RoundGroup> getRoundGroupsByTournamentId(Long tournamentId) {
         return roundGroupRepository.findByTournamentId(tournamentId);
@@ -82,9 +87,11 @@ public class RoundGroupService {
             Round nextRound = roundRepository.findByRoundGroup_IdAndRoundNumber(roundGroupId, nextRoundNumber)
                     .orElseThrow(() -> new EntityNotFoundException("Next round not found"));
 
-            List<Team> teams = teamRepository.findByTournamentAndDisqualifiedFalse(tournament);
-
-            roundService.setTeams(nextRound, teams);
+            if(roundFormat(nextRound) == DebateFormat.LD) {
+                roundService.setDebaters(nextRound, eligibleDebaters(tournament));
+            } else {
+                roundService.setTeams(nextRound, teamRepository.findByTournamentAndDisqualifiedFalse(tournament));
+            }
 
             roundService.generateMatchesAndAssignJudges(nextRound);
 
@@ -98,18 +105,21 @@ public class RoundGroupService {
             throw new IllegalStateException("Round group is completed");
         }
 
-        int numberOfEntrants = (int)Math.pow(2, roundCount - currentRoundNumber);
-
         Round nextRound = roundRepository.findByRoundGroup_IdAndRoundNumber(roundGroupId, nextRoundNumber)
                 .orElseThrow(() -> new EntityNotFoundException("Next round not found"));
 
         if(roundGroup.getType() == RoundGroupType.TEAM_ELIMINATION) {
             List<Team> winners = roundService.getMatchWinnerTeams(currentRound.getId());
+            assertExpectedQualifierCount(
+                    winners,
+                    entrantsForRound(roundCount - currentRoundNumber, roundFormat(nextRound))
+            );
             roundService.setTeams(nextRound, winners);
         }
 
         if(roundGroup.getType() == RoundGroupType.SOLO_ELIMINATION) {
             List<TournamentParticipant> winners = roundService.getMatchWinnerDebaters(currentRound.getId());
+            assertExpectedQualifierCount(winners, entrantsForRound(roundCount - currentRoundNumber, DebateFormat.LD));
             roundService.setDebaters(nextRound, winners);
         }
 
@@ -128,44 +138,138 @@ public class RoundGroupService {
     private void startEliminationRounds(Tournament tournament) {
         RoundGroup teamEliminationRoundGroup = tournament.getRoundGroups().stream().filter(roundGroup -> roundGroup.getType() == RoundGroupType.TEAM_ELIMINATION).findFirst()
                 .orElseThrow(() -> new EntityNotFoundException("Team elimination round group not found"));
+        Optional<RoundGroup> soloEliminationRoundGroup = tournament.getRoundGroups().stream()
+                .filter(roundGroup -> roundGroup.getType() == RoundGroupType.SOLO_ELIMINATION)
+                .findFirst();
+
+        validatePreliminaryTeamResults(tournament);
+        soloEliminationRoundGroup.ifPresent(ignored -> validatePreliminarySpeakerScores(tournament));
 
         Round teamEliminationFirstRound = roundRepository.findByRoundGroup_IdAndRoundNumber(teamEliminationRoundGroup.getId(), 1)
                 .orElseThrow(() -> new EntityNotFoundException("Team elimination first round not found"));
 
-        int numberOfEntrants = (int)Math.pow(2, teamEliminationRoundGroup.getRounds().size());
+        if(teamEliminationRoundGroup.getCurrentRoundNumber() != null) {
+            throw new IllegalStateException("Team elimination rounds have already started.");
+        }
+
+        int teamEntrants = entrantsForRound(
+                teamEliminationRoundGroup.getRounds().size(),
+                teamEliminationRoundGroup.getFormat()
+        );
 
         List<Team> topTeams = teamRepository.findByTournamentAndDisqualifiedFalse(tournament).stream()
                 .sorted(Comparator.comparing(Team::getPreliminaryScore, Comparator.nullsFirst(Comparator.naturalOrder())).reversed())
-                .limit(numberOfEntrants)
+                .limit(teamEntrants)
                 .toList();
 
-        if(numberOfEntrants != topTeams.size()) {
+        if(teamEntrants != topTeams.size()) {
             throw new IllegalStateException("Not enough teams");
         }
 
         roundService.setTeams(teamEliminationFirstRound, topTeams);
+        roundService.generateMatchesAndAssignJudges(teamEliminationFirstRound);
 
         teamEliminationRoundGroup.setCurrentRoundNumber(1);
         roundGroupRepository.save(teamEliminationRoundGroup);
 
-        RoundGroup soloEliminationRoundGroup = tournament.getRoundGroups().stream().filter(roundGroup -> roundGroup.getType() == RoundGroupType.SOLO_ELIMINATION).findFirst()
-                .orElseThrow(() -> new EntityNotFoundException("Solo elimination round group not found"));
+        if(soloEliminationRoundGroup.isEmpty()) {
+            return;
+        }
 
-        Round soloEliminationFirstRound = roundRepository.findByRoundGroup_IdAndRoundNumber(soloEliminationRoundGroup.getId(), 1)
+        RoundGroup soloGroup = soloEliminationRoundGroup.get();
+
+        Round soloEliminationFirstRound = roundRepository.findByRoundGroup_IdAndRoundNumber(soloGroup.getId(), 1)
                 .orElseThrow(() -> new EntityNotFoundException("Solo elimination first round not found"));
 
-        List<TournamentParticipant> topDebaters = tournament.getTeams().stream().flatMap(team -> team.getMembers().stream())
+        if(soloGroup.getCurrentRoundNumber() != null) {
+            throw new IllegalStateException("Solo elimination rounds have already started.");
+        }
+
+        int soloEntrants = entrantsForRound(soloGroup.getRounds().size(), DebateFormat.LD);
+        List<TournamentParticipant> topDebaters = eligibleDebaters(tournament).stream()
                 .sorted(Comparator.comparing(TournamentParticipant::getSpeakerScore, Comparator.nullsFirst(Comparator.naturalOrder())).reversed())
-                .limit(numberOfEntrants)
+                .limit(soloEntrants)
                 .toList();
 
-        if(numberOfEntrants != topDebaters.size()) {
+        if(soloEntrants != topDebaters.size()) {
             throw new IllegalStateException("Not enough debaters");
         }
 
         roundService.setDebaters(soloEliminationFirstRound, topDebaters);
+        roundService.generateMatchesAndAssignJudges(soloEliminationFirstRound);
 
-        soloEliminationRoundGroup.setCurrentRoundNumber(1);
-        roundGroupRepository.save(soloEliminationRoundGroup);
+        soloGroup.setCurrentRoundNumber(1);
+        roundGroupRepository.save(soloGroup);
+    }
+
+    private void validatePreliminarySpeakerScores(Tournament tournament) {
+        RoundGroup preliminaryGroup = tournament.getRoundGroups().stream()
+                .filter(roundGroup -> roundGroup.getType() == RoundGroupType.PRELIMINARY)
+                .findFirst()
+                .orElseThrow(() -> new EntityNotFoundException("Preliminary round group not found"));
+
+        List<Match> preliminaryMatches = preliminaryMatches(preliminaryGroup);
+        boolean missingScores = preliminaryMatches.isEmpty()
+                || preliminaryMatches.stream().anyMatch(this::hasMissingParticipantScores)
+                || eligibleDebaters(tournament).stream().anyMatch(participant -> participant.getSpeakerScore() == null);
+
+        if(missingScores) {
+            throw new IllegalStateException("Cannot generate LD bracket while preliminary speaker points are missing.");
+        }
+    }
+
+    private void validatePreliminaryTeamResults(Tournament tournament) {
+        RoundGroup preliminaryGroup = tournament.getRoundGroups().stream()
+                .filter(roundGroup -> roundGroup.getType() == RoundGroupType.PRELIMINARY)
+                .findFirst()
+                .orElseThrow(() -> new EntityNotFoundException("Preliminary round group not found"));
+
+        boolean invalid = preliminaryMatches(preliminaryGroup).stream()
+                .filter(MatchParticipantScorePolicy::isTeamFormat)
+                .anyMatch(match -> !MatchParticipantScorePolicy.hasExpectedTeamSlots(match)
+                        || !MatchParticipantScorePolicy.hasValidWinnerFlags(match));
+        if(invalid) {
+            throw new IllegalStateException("Cannot advance while preliminary team winners are invalid.");
+        }
+    }
+
+    private List<Match> preliminaryMatches(RoundGroup preliminaryGroup) {
+        return Optional.ofNullable(preliminaryGroup.getRounds()).orElse(List.of()).stream()
+                .flatMap(round -> Optional.ofNullable(round.getMatches()).orElse(List.of()).stream())
+                .filter(match -> !Boolean.TRUE.equals(match.getIsBye()))
+                .toList();
+    }
+
+    private boolean hasMissingParticipantScores(Match match) {
+        return !Boolean.TRUE.equals(match.getCompleted())
+                || !MatchParticipantScorePolicy.hasCompleteParticipantScores(match);
+    }
+
+    private DebateFormat roundFormat(Round round) {
+        return round.getCustomFormat() != null ? round.getCustomFormat() : round.getRoundGroup().getFormat();
+    }
+
+    private List<TournamentParticipant> eligibleDebaters(Tournament tournament) {
+        return Optional.ofNullable(tournament.getTeams()).orElse(List.of()).stream()
+                .filter(Objects::nonNull)
+                .filter(team -> !Boolean.TRUE.equals(team.getDisqualified()))
+                .map(Team::getMembers)
+                .filter(Objects::nonNull)
+                .flatMap(List::stream)
+                .toList();
+    }
+
+    private int entrantsForRound(int remainingRounds, DebateFormat format) {
+        int exponent = remainingRounds + (format == DebateFormat.BPF ? 1 : 0);
+        if(remainingRounds < 1 || exponent > 30) {
+            throw new IllegalStateException("Elimination round count must be between 1 and 30.");
+        }
+        return 1 << exponent;
+    }
+
+    private <T> void assertExpectedQualifierCount(List<T> qualifiers, int expectedCount) {
+        if(qualifiers.size() != expectedCount || qualifiers.stream().distinct().count() != expectedCount) {
+            throw new IllegalStateException("Completed matches did not produce the expected unique qualifiers.");
+        }
     }
 }

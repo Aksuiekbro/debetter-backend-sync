@@ -3,17 +3,22 @@ package com.heliozz10.debetter.service.tournament;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.heliozz10.debetter.content.tournament.DebateFormat;
 import com.heliozz10.debetter.content.tournament.Judge;
 import com.heliozz10.debetter.content.tournament.TournamentParticipant;
 import com.heliozz10.debetter.content.tournament.match.Match;
+import com.heliozz10.debetter.content.tournament.match.MatchParticipantScore;
 import com.heliozz10.debetter.content.tournament.round.Round;
+import com.heliozz10.debetter.content.tournament.round.RoundGroupType;
 import com.heliozz10.debetter.content.tournament.team.Team;
 import com.heliozz10.debetter.content.user.User;
 import com.heliozz10.debetter.dto.tournament.match.in.MatchResultDto;
 import com.heliozz10.debetter.dto.tournament.match.in.MatchUpdateDto;
 import com.heliozz10.debetter.dto.tournament.match.in.ParticipantScoreDto;
+import com.heliozz10.debetter.dto.tournament.match.in.TeamResultDto;
 import com.heliozz10.debetter.repository.tournament.JudgeRepository;
 import com.heliozz10.debetter.repository.tournament.TournamentParticipantRepository;
+import com.heliozz10.debetter.repository.tournament.match.MatchParticipantScoreRepository;
 import com.heliozz10.debetter.repository.tournament.match.MatchRepository;
 import com.heliozz10.debetter.repository.tournament.round.RoundRepository;
 import com.heliozz10.debetter.repository.tournament.team.TeamRepository;
@@ -38,6 +43,7 @@ public class MatchService {
     private final TeamRepository teamRepository;
     private final JudgeRepository judgeRepository;
     private final TournamentParticipantRepository tournamentParticipantRepository;
+    private final MatchParticipantScoreRepository matchParticipantScoreRepository;
     private final TournamentSecurity tournamentSecurity;
 
     private final ObjectMapper objectMapper;
@@ -190,7 +196,6 @@ public class MatchService {
         }
     }
 
-    //TODO: fix this, this doesnt set the scores for the teams and debaters, it only sets the scores for the matches. Already done but keeping the todo
     @Transactional
     public void submitMatchResults(Long tournamentId, Long roundGroupId, Long roundId, Collection<MatchResultDto> results) {
         if(results == null || results.isEmpty()) {
@@ -216,73 +221,94 @@ public class MatchService {
             throw new IllegalArgumentException("Some match results do not belong to the specified round.");
         }
 
-        if(matchRepository.countCompletedMatches(matchIds) > 0) {
-            throw new IllegalStateException("Cannot re-submit results for already completed matches.");
-        }
-
-        Map<Long, Match> matchesById = matchRepository.findAllById(matchIds).stream()
+        Map<Long, Match> matchesById = matchRepository.findAllByIdForUpdate(matchIds).stream()
                 .collect(Collectors.toMap(Match::getId, m -> m));
 
-        ArrayNode arrayNode = objectMapper.createArrayNode();
-
+        Map<Long, Boolean> legacyRepairsByMatchId = new HashMap<>();
         results.forEach(result -> {
-            ObjectNode objectNode = objectMapper.createObjectNode();
-
-            objectNode.put("tournament_id", tournamentId);
-            objectNode.put("match_id", result.matchId());
-
             Match match = matchesById.get(result.matchId());
-            Map<Long, Integer> teamSlotByTeamId = new HashMap<>();
-            if (match != null) {
-                if (match.getTeam1() != null) teamSlotByTeamId.put(match.getTeam1().getId(), 1);
-                if (match.getTeam2() != null) teamSlotByTeamId.put(match.getTeam2().getId(), 2);
-                if (match.getTeam3() != null) teamSlotByTeamId.put(match.getTeam3().getId(), 3);
-                if (match.getTeam4() != null) teamSlotByTeamId.put(match.getTeam4().getId(), 4);
+            validateCompleteBallot(match, result);
+
+            boolean legacyRepair = isLegacyTeamScoreRepair(match);
+            if(Boolean.TRUE.equals(match.getCompleted()) && !legacyRepair) {
+                throw new IllegalStateException("Cannot re-submit results for already completed matches.");
             }
-
-            Integer[] teamScores = new Integer[4];
-            Boolean[] teamWons = new Boolean[4];
-
-            if (result.teamResults() != null) {
-                for (var teamResult : result.teamResults()) {
-                    Integer slot = teamSlotByTeamId.get(teamResult.teamId());
-                    if (slot == null) continue;
-                    int idx = slot - 1;
-                    List<ParticipantScoreDto> ps = teamResult.participantScores();
-                    teamScores[idx] = ps.stream()
-                            .map(ParticipantScoreDto::score)
-                            .filter(Objects::nonNull)
-                            .reduce(0, Integer::sum);
-                    teamWons[idx] = teamResult.won();
-                }
+            if(legacyRepair) {
+                validateLegacyTeamScoreRepair(match, result);
             }
-
-            for (int i = 0; i < 4; i++) {
-                objectNode.put("team" + (i + 1) + "score", teamScores[i]);
-                objectNode.put("team" + (i + 1) + "won", teamWons[i]);
-            }
-
-            Map<Long, Integer> debaterScoreById = new HashMap<>();
-            if (result.participantScores() != null) {
-                result.participantScores().forEach(ps -> {
-                    if (ps.participantId() != null && ps.score() != null) {
-                        debaterScoreById.put(ps.participantId(), ps.score());
-                    }
-                });
-            }
-            Long debater1Id = match != null && match.getDebater1() != null ? match.getDebater1().getId() : null;
-            Long debater2Id = match != null && match.getDebater2() != null ? match.getDebater2().getId() : null;
-            objectNode.put("debater1score", debater1Id != null ? debaterScoreById.get(debater1Id) : null);
-            objectNode.put("debater2score", debater2Id != null ? debaterScoreById.get(debater2Id) : null);
-
-            arrayNode.add(objectNode);
+            legacyRepairsByMatchId.put(result.matchId(), legacyRepair);
         });
 
-        String json = arrayNode.toString();
-        matchRepository.updateMatchScoresBulk(json);
+        List<MatchResultDto> newResults = results.stream()
+                .filter(result -> !legacyRepairsByMatchId.get(result.matchId()))
+                .toList();
+
+        if(!newResults.isEmpty()) {
+            ArrayNode arrayNode = objectMapper.createArrayNode();
+
+            newResults.forEach(result -> {
+                ObjectNode objectNode = objectMapper.createObjectNode();
+
+                objectNode.put("tournament_id", tournamentId);
+                objectNode.put("match_id", result.matchId());
+
+                Match match = matchesById.get(result.matchId());
+                Map<Long, Integer> teamSlotByTeamId = new HashMap<>();
+                if (match != null) {
+                    if (match.getTeam1() != null) teamSlotByTeamId.put(match.getTeam1().getId(), 1);
+                    if (match.getTeam2() != null) teamSlotByTeamId.put(match.getTeam2().getId(), 2);
+                    if (match.getTeam3() != null) teamSlotByTeamId.put(match.getTeam3().getId(), 3);
+                    if (match.getTeam4() != null) teamSlotByTeamId.put(match.getTeam4().getId(), 4);
+                }
+
+                Integer[] teamScores = new Integer[4];
+                Boolean[] teamWons = new Boolean[4];
+
+                if (result.teamResults() != null) {
+                    for (var teamResult : result.teamResults()) {
+                        Integer slot = teamSlotByTeamId.get(teamResult.teamId());
+                        if (slot == null) continue;
+                        int idx = slot - 1;
+                        List<ParticipantScoreDto> ps = teamResult.participantScores();
+                        teamScores[idx] = ps.stream()
+                                .map(ParticipantScoreDto::score)
+                                .filter(Objects::nonNull)
+                                .reduce(0, Integer::sum);
+                        teamWons[idx] = teamResult.won();
+                    }
+                }
+
+                for (int i = 0; i < 4; i++) {
+                    objectNode.put("team" + (i + 1) + "score", teamScores[i]);
+                    objectNode.put("team" + (i + 1) + "won", teamWons[i]);
+                }
+
+                Map<Long, Integer> debaterScoreById = new HashMap<>();
+                if (result.participantScores() != null) {
+                    result.participantScores().forEach(ps -> {
+                        if (ps.participantId() != null && ps.score() != null) {
+                            debaterScoreById.put(ps.participantId(), ps.score());
+                        }
+                    });
+                }
+                Long debater1Id = match != null && match.getDebater1() != null ? match.getDebater1().getId() : null;
+                Long debater2Id = match != null && match.getDebater2() != null ? match.getDebater2().getId() : null;
+                objectNode.put("debater1score", debater1Id != null ? debaterScoreById.get(debater1Id) : null);
+                objectNode.put("debater2score", debater2Id != null ? debaterScoreById.get(debater2Id) : null);
+
+                arrayNode.add(objectNode);
+            });
+
+            matchRepository.updateMatchScoresBulk(arrayNode.toString());
+        }
 
         results.forEach(result -> {
             if (result.teamResults() == null) return;
+            Match match = matchesById.get(result.matchId());
+            persistTeamParticipantScores(match, result.teamResults());
+            if(Boolean.TRUE.equals(legacyRepairsByMatchId.get(result.matchId())) || !isPreliminaryMatch(match)) {
+                return;
+            }
             result.teamResults().forEach(teamResult -> {
                 if (teamResult.participantScores() == null) return;
                 teamResult.participantScores().forEach(ps -> {
@@ -292,5 +318,189 @@ public class MatchService {
                 });
             });
         });
+    }
+
+    private boolean isPreliminaryMatch(Match match) {
+        return match != null
+                && match.getRound() != null
+                && match.getRound().getRoundGroup() != null
+                && match.getRound().getRoundGroup().getType() == RoundGroupType.PRELIMINARY;
+    }
+
+    private boolean isLegacyTeamScoreRepair(Match match) {
+        if(match == null
+                || !Boolean.TRUE.equals(match.getCompleted())
+                || !MatchParticipantScorePolicy.isTeamFormat(match)
+                || !MatchParticipantScorePolicy.hasRepairableAggregateResult(match)) {
+            return false;
+        }
+
+        return matchParticipantScoreRepository.countByMatchId(match.getId()) == 0;
+    }
+
+    private void validateLegacyTeamScoreRepair(Match match, MatchResultDto result) {
+        if (!MatchParticipantScorePolicy.hasRepairableAggregateResult(match)) {
+            throw new IllegalArgumentException("Legacy participant-score repair requires completed team totals and winners.");
+        }
+
+        for(TeamResultDto teamResult : result.teamResults()) {
+            int slot = teamSlot(match, teamResult.teamId());
+            int suppliedScore = teamResult.participantScores().stream()
+                    .mapToInt(ParticipantScoreDto::score)
+                    .sum();
+            if(!Objects.equals(teamScore(match, slot), suppliedScore)
+                    || !Objects.equals(teamWon(match, slot), teamResult.won())) {
+                throw new IllegalArgumentException("Legacy participant-score repair must preserve the completed team total and winner.");
+            }
+        }
+    }
+
+    private void persistTeamParticipantScores(Match match, List<TeamResultDto> teamResults) {
+        Map<Long, TournamentParticipant> participantsById = Stream.of(
+                        match.getTeam1(), match.getTeam2(), match.getTeam3(), match.getTeam4())
+                .filter(Objects::nonNull)
+                .map(Team::getMembers)
+                .filter(Objects::nonNull)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toMap(TournamentParticipant::getId, participant -> participant));
+        List<MatchParticipantScore> scores = teamResults.stream()
+                .flatMap(teamResult -> teamResult.participantScores().stream())
+                .map(participantScore -> {
+                    MatchParticipantScore score = new MatchParticipantScore();
+                    score.setMatch(match);
+                    score.setParticipant(participantsById.get(participantScore.participantId()));
+                    score.setScore(participantScore.score());
+                    return score;
+                })
+                .toList();
+
+        if(match.getParticipantScores() == null) {
+            match.setParticipantScores(new ArrayList<>());
+        }
+        match.getParticipantScores().addAll(scores);
+        matchParticipantScoreRepository.saveAll(scores);
+    }
+
+    private DebateFormat resolveFormat(Match match) {
+        return MatchParticipantScorePolicy.resolveFormat(match);
+    }
+
+    private int teamSlot(Match match, Long teamId) {
+        if(Objects.equals(match.getTeam1() == null ? null : match.getTeam1().getId(), teamId)) return 1;
+        if(Objects.equals(match.getTeam2() == null ? null : match.getTeam2().getId(), teamId)) return 2;
+        if(Objects.equals(match.getTeam3() == null ? null : match.getTeam3().getId(), teamId)) return 3;
+        if(Objects.equals(match.getTeam4() == null ? null : match.getTeam4().getId(), teamId)) return 4;
+        throw new IllegalArgumentException("Team result does not belong to the match.");
+    }
+
+    private Integer teamScore(Match match, int slot) {
+        return switch(slot) {
+            case 1 -> match.getTeam1Score();
+            case 2 -> match.getTeam2Score();
+            case 3 -> match.getTeam3Score();
+            case 4 -> match.getTeam4Score();
+            default -> throw new IllegalArgumentException("Invalid team slot.");
+        };
+    }
+
+    private Boolean teamWon(Match match, int slot) {
+        return switch(slot) {
+            case 1 -> match.getTeam1Won();
+            case 2 -> match.getTeam2Won();
+            case 3 -> match.getTeam3Won();
+            case 4 -> match.getTeam4Won();
+            default -> throw new IllegalArgumentException("Invalid team slot.");
+        };
+    }
+
+    private void validateCompleteBallot(Match match, MatchResultDto result) {
+        if(match == null) {
+            throw new IllegalArgumentException("Match result could not be resolved.");
+        }
+
+        DebateFormat format = resolveFormat(match);
+
+        if(format == DebateFormat.LD) {
+            if(result.teamResults() != null && !result.teamResults().isEmpty()) {
+                throw new IllegalArgumentException("LD results must contain participant scores only.");
+            }
+            if(match.getDebater1() == null || match.getDebater2() == null) {
+                throw new IllegalStateException("LD match does not have two debater slots.");
+            }
+
+            List<ParticipantScoreDto> scores = result.participantScores();
+            validateParticipantScores(scores, List.of(match.getDebater1(), match.getDebater2()));
+
+            Map<Long, Integer> scoreByParticipant = scores.stream()
+                    .collect(Collectors.toMap(ParticipantScoreDto::participantId, ParticipantScoreDto::score));
+            if(Objects.equals(scoreByParticipant.get(match.getDebater1().getId()), scoreByParticipant.get(match.getDebater2().getId()))) {
+                throw new IllegalArgumentException("LD results cannot be tied.");
+            }
+            return;
+        }
+
+        if(result.participantScores() != null && !result.participantScores().isEmpty()) {
+            throw new IllegalArgumentException("Team-format results must nest participant scores under each team.");
+        }
+
+        if(format == null) {
+            throw new IllegalStateException("Match format is not configured.");
+        }
+
+        int requiredTeams = format == DebateFormat.BPF ? 4 : 2;
+        List<Team> teams = MatchParticipantScorePolicy.expectedTeams(match);
+        if(teams.size() != requiredTeams) {
+            throw new IllegalStateException("Match does not have the required team slots for its format.");
+        }
+
+        List<TeamResultDto> teamResults = result.teamResults();
+        if(teamResults == null || teamResults.size() != requiredTeams) {
+            throw new IllegalArgumentException("A result is required for every team in the match.");
+        }
+
+        Set<Long> expectedTeamIds = teams.stream().map(Team::getId).collect(Collectors.toSet());
+        Set<Long> suppliedTeamIds = teamResults.stream().map(TeamResultDto::teamId).collect(Collectors.toSet());
+        if(suppliedTeamIds.size() != teamResults.size() || !suppliedTeamIds.equals(expectedTeamIds)) {
+            throw new IllegalArgumentException("Team results must identify each match team exactly once.");
+        }
+
+        if(teamResults.stream().anyMatch(teamResult -> teamResult.won() == null)) {
+            throw new IllegalArgumentException("Every team must have an explicit winner result.");
+        }
+
+        long winnerCount = teamResults.stream().filter(teamResult -> Boolean.TRUE.equals(teamResult.won())).count();
+        int requiredWinnerCount = format == DebateFormat.BPF ? 2 : 1;
+        if(winnerCount != requiredWinnerCount) {
+            throw new IllegalArgumentException("Exactly " + requiredWinnerCount + " teams must be marked as winners.");
+        }
+
+        Map<Long, Team> teamsById = teams.stream().collect(Collectors.toMap(Team::getId, team -> team));
+        teamResults.forEach(teamResult -> validateParticipantScores(
+                teamResult.participantScores(),
+                Optional.ofNullable(teamsById.get(teamResult.teamId()).getMembers()).orElse(List.of())
+        ));
+    }
+
+    private void validateParticipantScores(List<ParticipantScoreDto> scores, List<TournamentParticipant> participants) {
+        if(scores == null || participants == null || participants.isEmpty() || scores.size() != participants.size()) {
+            throw new IllegalArgumentException("A score is required for every participating debater.");
+        }
+
+        Set<Long> expectedParticipantIds = participants.stream()
+                .map(TournamentParticipant::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> suppliedParticipantIds = scores.stream()
+                .map(ParticipantScoreDto::participantId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        boolean hasInvalidScore = scores.stream().anyMatch(score -> score.score() == null || score.score() < 0);
+
+        if(expectedParticipantIds.size() != participants.size()
+                || suppliedParticipantIds.size() != scores.size()
+                || !suppliedParticipantIds.equals(expectedParticipantIds)
+                || hasInvalidScore) {
+            throw new IllegalArgumentException("Participant scores must cover each match debater exactly once.");
+        }
     }
 }

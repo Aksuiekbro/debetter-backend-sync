@@ -3,3 +3,7 @@ databaseChangeLog:
       file: db/changelog/create_functions.sql
   - include:
       file: db/changelog/add_match_winner_columns.sql
+  - include:
+      file: db/changelog/restrict_standings_to_preliminary.sql
+  - include:
+      file: db/changelog/add_match_participant_scores.sql

@@ -15,6 +15,7 @@ import com.heliozz10.debetter.repository.tournament.match.DebaterMatchupHistoryR
 import com.heliozz10.debetter.repository.tournament.match.MatchRepository;
 import com.heliozz10.debetter.repository.tournament.match.TeamMatchupHistoryRepository;
 import com.heliozz10.debetter.repository.tournament.round.RoundRepository;
+import com.heliozz10.debetter.service.tournament.MatchParticipantScorePolicy;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,29 +41,69 @@ public class RoundService {
 
     @Transactional(readOnly = true)
     public List<Team> getMatchWinnerTeams(Long roundId) {
-        return matchRepository.findByRoundId(roundId).stream()
-                .flatMap(match -> Stream.of(
-                        Boolean.TRUE.equals(match.getTeam1Won()) ? match.getTeam1() : null,
-                        Boolean.TRUE.equals(match.getTeam2Won()) ? match.getTeam2() : null,
-                        Boolean.TRUE.equals(match.getTeam3Won()) ? match.getTeam3() : null,
-                        Boolean.TRUE.equals(match.getTeam4Won()) ? match.getTeam4() : null
-                ))
-                .filter(Objects::nonNull)
-                .toList();
+        return matchRepository.findByRoundId(roundId).stream().flatMap(match -> {
+            if(!Boolean.TRUE.equals(match.getCompleted())) {
+                throw new IllegalStateException("Cannot advance from an incomplete match.");
+            }
+
+            DebateFormat format = Optional.ofNullable(match.getRound().getCustomFormat())
+                    .orElse(match.getRound().getRoundGroup().getFormat());
+            if(format == DebateFormat.LD) {
+                throw new IllegalStateException("LD matches do not advance team winners.");
+            }
+
+            int requiredTeamCount = format == DebateFormat.BPF ? 4 : 2;
+            int requiredWinnerCount = format == DebateFormat.BPF ? 2 : 1;
+            if(!MatchParticipantScorePolicy.hasExpectedTeamSlots(match)) {
+                throw new IllegalStateException("A completed " + format + " match must have exactly "
+                        + requiredTeamCount + " teams.");
+            }
+            if(!MatchParticipantScorePolicy.hasValidWinnerFlags(match)) {
+                throw new IllegalStateException("A completed " + format + " match must have exactly "
+                        + requiredWinnerCount + (requiredWinnerCount == 1 ? " winner." : " winners."));
+            }
+            List<Team> teams = Stream.of(
+                            match.getTeam1(), match.getTeam2(), match.getTeam3(), match.getTeam4())
+                    .filter(Objects::nonNull)
+                    .toList();
+            if(teams.size() != requiredTeamCount) {
+                throw new IllegalStateException("A completed " + format + " match must have exactly "
+                        + requiredTeamCount + " teams.");
+            }
+
+            List<Team> winners = Stream.of(
+                            Boolean.TRUE.equals(match.getTeam1Won()) ? match.getTeam1() : null,
+                            Boolean.TRUE.equals(match.getTeam2Won()) ? match.getTeam2() : null,
+                            Boolean.TRUE.equals(match.getTeam3Won()) ? match.getTeam3() : null,
+                            Boolean.TRUE.equals(match.getTeam4Won()) ? match.getTeam4() : null)
+                    .filter(Objects::nonNull)
+                    .toList();
+            if(winners.size() != requiredWinnerCount) {
+                throw new IllegalStateException("A completed " + format + " match must have exactly "
+                        + requiredWinnerCount + (requiredWinnerCount == 1 ? " winner." : " winners."));
+            }
+            return winners.stream();
+        }).toList();
     }
 
     @Transactional(readOnly = true)
     public List<TournamentParticipant> getMatchWinnerDebaters(Long roundId) {
-        return matchRepository.findByRoundId(roundId).stream()
-                .map(match -> {
-                    if (match.getDebater1Score() != null && match.getDebater2Score() != null) {
-                        return match.getDebater1Score() >= match.getDebater2Score()
-                                ? match.getDebater1() : match.getDebater2();
-                    }
-                    return match.getDebater1Score() != null ? match.getDebater1() : match.getDebater2();
-                })
-                .filter(Objects::nonNull)
-                .toList();
+        return matchRepository.findByRoundId(roundId).stream().map(match -> {
+            DebateFormat format = Optional.ofNullable(match.getRound().getCustomFormat())
+                    .orElse(match.getRound().getRoundGroup().getFormat());
+            if(!Boolean.TRUE.equals(match.getCompleted())
+                    || format != DebateFormat.LD
+                    || match.getDebater1() == null
+                    || match.getDebater2() == null
+                    || Objects.equals(match.getDebater1().getId(), match.getDebater2().getId())
+                    || match.getDebater1Score() == null
+                    || match.getDebater2Score() == null
+                    || Objects.equals(match.getDebater1Score(), match.getDebater2Score())) {
+                throw new IllegalStateException("A completed LD match requires two distinct debater scores.");
+            }
+            return match.getDebater1Score() > match.getDebater2Score()
+                    ? match.getDebater1() : match.getDebater2();
+        }).toList();
     }
 
     @Transactional(readOnly = true)

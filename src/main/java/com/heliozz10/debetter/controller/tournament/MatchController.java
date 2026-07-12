@@ -6,6 +6,7 @@ import com.heliozz10.debetter.dto.tournament.match.in.MatchResultDto;
 import com.heliozz10.debetter.dto.tournament.match.in.MatchUpdateDto;
 import com.heliozz10.debetter.dto.tournament.match.out.MatchView;
 import com.heliozz10.debetter.mapper.tournament.MatchMapper;
+import com.heliozz10.debetter.security.tournament.TournamentSecurity;
 import com.heliozz10.debetter.service.tournament.MatchService;
 import com.heliozz10.debetter.service.tournament.round.RoundService;
 import jakarta.validation.Valid;
@@ -26,6 +27,7 @@ public class MatchController {
     private final MatchService matchService;
     private final MatchMapper matchMapper;
     private final RoundService roundService;
+    private final TournamentSecurity tournamentSecurity;
 
     @GetMapping
     public PageableResult<MatchView> getMatchesByRoundId(
@@ -37,7 +39,10 @@ public class MatchController {
     ) {
         Page<Match> matches = matchService.getVisibleMatchesByRoundId(tournamentId, roundGroupId, roundId, authentication, pageable);
         return new PageableResult<>(
-                matchMapper.toMatchViews(matches.getContent()),
+                matchMapper.toMatchViews(
+                        matches.getContent(),
+                        tournamentSecurity.hasResultEntryPermission(authentication, tournamentId)
+                ),
                 matches.getTotalElements(),
                 matches.getTotalPages()
         );
@@ -52,7 +57,10 @@ public class MatchController {
             @PathVariable Long matchId,
             @Valid @RequestBody MatchUpdateDto matchUpdateDto
     ) {
-        return matchMapper.toMatchView(matchService.updateMatch(tournamentId, roundGroupId, roundId, matchId, matchUpdateDto));
+        return matchMapper.toMatchView(
+                matchService.updateMatch(tournamentId, roundGroupId, roundId, matchId, matchUpdateDto),
+                true
+        );
     }
 
     @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #tournamentId)")

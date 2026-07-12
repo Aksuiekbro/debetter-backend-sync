@@ -3,11 +3,14 @@ package com.heliozz10.debetter.controller.tournament.round;
 import com.heliozz10.debetter.dto.tournament.round.in.RoundUpdateDto;
 import com.heliozz10.debetter.dto.tournament.round.out.RoundView;
 import com.heliozz10.debetter.dto.tournament.round.out.SimpleRoundView;
+import com.heliozz10.debetter.mapper.tournament.MatchMapper;
 import com.heliozz10.debetter.mapper.tournament.round.RoundMapper;
+import com.heliozz10.debetter.security.tournament.TournamentSecurity;
 import com.heliozz10.debetter.service.tournament.round.RoundService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +21,8 @@ import java.util.List;
 public class RoundController {
     private final RoundService roundService;
     private final RoundMapper roundMapper;
+    private final MatchMapper matchMapper;
+    private final TournamentSecurity tournamentSecurity;
 
     @GetMapping
     public List<SimpleRoundView> getRoundsByRoundGroupId(@PathVariable Long tournamentId, @PathVariable Long roundGroupId) {
@@ -25,8 +30,18 @@ public class RoundController {
     }
 
     @GetMapping("/{id}")
-    public RoundView getRoundById(@PathVariable Long tournamentId, @PathVariable Long roundGroupId, @PathVariable Long id) {
-        return roundMapper.toRoundView(roundService.getRoundByTournamentIdAndRoundGroupIdAndId(tournamentId, roundGroupId, id));
+    public RoundView getRoundById(
+            @PathVariable Long tournamentId,
+            @PathVariable Long roundGroupId,
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        var round = roundService.getRoundByTournamentIdAndRoundGroupIdAndId(tournamentId, roundGroupId, id);
+        RoundView view = roundMapper.toRoundView(round);
+        if (tournamentSecurity.hasResultEntryPermission(authentication, tournamentId)) {
+            view.setMatches(matchMapper.toMatchViews(round.getMatches(), true));
+        }
+        return view;
     }
 
     @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #tournamentId)")

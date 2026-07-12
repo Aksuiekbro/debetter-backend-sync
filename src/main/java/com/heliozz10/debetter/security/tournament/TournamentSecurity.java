@@ -1,6 +1,7 @@
 package com.heliozz10.debetter.security.tournament;
 
 import com.heliozz10.debetter.content.tournament.Tournament;
+import com.heliozz10.debetter.content.user.Role;
 import com.heliozz10.debetter.content.user.User;
 import com.heliozz10.debetter.content.user.role.TournamentRole;
 import com.heliozz10.debetter.content.user.role.UserTournamentKey;
@@ -12,6 +13,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
@@ -82,5 +84,13 @@ public class TournamentSecurity {
     public boolean hasRoundViewPermission(UserDetails principal, Long roundId) {
         Long userId = ((User) principal).getId();
         return userTournamentRoleRepository.existsViewPermissionForRound(userId, roundId);
+    }
+
+    public boolean hasResultEntryPermission(Authentication authentication, Long tournamentId) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {
+            return false;
+        }
+
+        return user.getRole() == Role.ORGANIZER && hasEditPermission(user, tournamentId);
     }
 }

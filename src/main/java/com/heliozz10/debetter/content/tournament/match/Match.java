@@ -9,6 +9,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -24,6 +26,7 @@ import java.time.LocalDateTime;
                         @NamedAttributeNode("team4"),
                         @NamedAttributeNode(value = "debater1", subgraph = "debaterSubgraph"),
                         @NamedAttributeNode(value = "debater2", subgraph = "debaterSubgraph"),
+                        @NamedAttributeNode(value = "participantScores", subgraph = "participantScoresSubgraph"),
                         @NamedAttributeNode("judge")
                 },
                 subgraphs = {
@@ -37,6 +40,18 @@ import java.time.LocalDateTime;
                                 name = "profileSubgraph",
                                 attributeNodes = {
                                         @NamedAttributeNode("user")
+                                }
+                        ),
+                        @NamedSubgraph(
+                                name = "participantScoresSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode(value = "participant", subgraph = "scoreParticipantSubgraph")
+                                }
+                        ),
+                        @NamedSubgraph(
+                                name = "scoreParticipantSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode("team")
                                 }
                         )
                 }
@@ -89,6 +104,9 @@ public class Match {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "debater2_id")
     private TournamentParticipant debater2;
+
+    @OneToMany(mappedBy = "match", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<MatchParticipantScore> participantScores = new ArrayList<>();
 
     @Column
     private String location;

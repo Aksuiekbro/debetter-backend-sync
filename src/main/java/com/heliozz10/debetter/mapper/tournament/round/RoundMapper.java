@@ -31,7 +31,7 @@ public interface RoundMapper {
 
     @AfterMapping
     default void mapMatchesIfPublic(Round round, @MappingTarget RoundView roundView, @Autowired MatchMapper matchMapper) {
-        if ( round.getMatchesArePublic() ) {
+        if (Boolean.TRUE.equals(round.getMatchesArePublic())) {
             roundView.setMatches( matchMapper.toMatchViews(round.getMatches()) );
         }
     }
