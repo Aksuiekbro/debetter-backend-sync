@@ -9,3 +9,5 @@ databaseChangeLog:
       file: db/changelog/add_match_participant_scores.sql
   - include:
       file: db/changelog/add_match_winner_participant.sql
+  - include:
+      file: db/changelog/allow_multiple_schedules_per_tournament.sql

@@ -99,8 +99,14 @@ public class GlobalExceptionHandler {
 //    }
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, String>> handleDataIntegrity(DataIntegrityViolationException ex) {
+        // Services throw this exception directly (no cause) with a user-facing message.
+        // Violations coming from the database arrive wrapped around a driver exception,
+        // where the original message is unsafe to show verbatim.
+        String message = ex.getCause() == null && ex.getMessage() != null
+                ? ex.getMessage()
+                : "This change conflicts with existing data. Please refresh the page and try again.";
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
-                "message", "That username or email is already taken."
+                "message", message
         ));
     }
 

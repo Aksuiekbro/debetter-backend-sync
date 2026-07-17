@@ -103,7 +103,7 @@ class UserServiceTest {
                 () -> userService.createUser(dto)
         );
 
-        assertEquals("Username or email already exists", exception.getMessage());
+        assertEquals("That username or email is already taken.", exception.getMessage());
         verify(userRepository, never()).save(any());
         verifyNoInteractions(userMapper, passwordEncoder, organizerProfileService, participantProfileService);
     }

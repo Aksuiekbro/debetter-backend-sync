@@ -15,16 +15,35 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class GlobalExceptionHandlerTest {
     @Test
-    void dataIntegrityViolationsReturnConflictMessage() {
+    void explicitDataIntegrityViolationsReturnTheirOwnMessage() {
         GlobalExceptionHandler handler = new GlobalExceptionHandler();
 
         ResponseEntity<Map<String, String>> response = handler.handleDataIntegrity(
-                new DataIntegrityViolationException("duplicate key")
+                new DataIntegrityViolationException("That username or email is already taken.")
         );
 
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals("That username or email is already taken.", response.getBody().get("message"));
+    }
+
+    @Test
+    void databaseDataIntegrityViolationsReturnGenericConflictMessage() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+        ResponseEntity<Map<String, String>> response = handler.handleDataIntegrity(
+                new DataIntegrityViolationException(
+                        "could not execute statement",
+                        new RuntimeException("duplicate key value violates unique constraint")
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(
+                "This change conflicts with existing data. Please refresh the page and try again.",
+                response.getBody().get("message")
+        );
     }
 
     @Test

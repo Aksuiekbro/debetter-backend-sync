@@ -76,7 +76,7 @@ public class UserService implements UserDetailsService {
     @Transactional
     public User createUser(UserRegistrationDto dto) {
         if (userRepository.existsByUsernameOrEmail(dto.username(), dto.email())) {
-            throw new DataIntegrityViolationException("Username or email already exists");
+            throw new DataIntegrityViolationException("That username or email is already taken.");
         }
 
         User user = userMapper.toUser(dto);

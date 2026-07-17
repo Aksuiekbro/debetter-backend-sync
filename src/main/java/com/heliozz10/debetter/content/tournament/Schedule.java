@@ -25,7 +25,7 @@ public class Schedule {
     @JoinColumn(name = "image_id")
     private Url imageUrl;
 
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tournament_id")
     private Tournament tournament;
 }
