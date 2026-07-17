@@ -1,5 +1,6 @@
 package com.heliozz10.debetter.service.tournament;
 
+import com.heliozz10.debetter.content.tag.TagType;
 import com.heliozz10.debetter.content.tournament.Tournament;
 import com.heliozz10.debetter.content.tournament.announcement.Announcement;
 import com.heliozz10.debetter.content.tournament.announcement.Comment;
@@ -16,6 +17,7 @@ import com.heliozz10.debetter.repository.tournament.TournamentRepository;
 import com.heliozz10.debetter.repository.tournament.announcement.AnnouncementRepository;
 import com.heliozz10.debetter.repository.tournament.announcement.CommentRepository;
 import com.heliozz10.debetter.repository.user.profile.OrganizerProfileRepository;
+import com.heliozz10.debetter.service.TagService;
 import com.heliozz10.debetter.service.util.media.FileService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
@@ -47,6 +49,8 @@ public class AnnouncementService {
 
     private final FileService fileService;
 
+    private final TagService tagService;
+
     @Transactional(readOnly = true)
     public Page<Announcement> getAnnouncementsByTournamentId(Long tournamentId, Pageable pageable) {
         return announcementRepository.findByTournamentId(tournamentId, pageable);
@@ -75,6 +79,10 @@ public class AnnouncementService {
         announcement.setAuthor(author);
         announcement.setTimestamp(LocalDateTime.now());
         announcement.setHidden(false);
+
+        if (announcementFormDto.tags() != null) {
+            announcement.setTags(tagService.findOrCreateTags(TagType.ANNOUNCEMENT, announcementFormDto.tags()));
+        }
 
         if(image != null) {
             Url url = fileService.uploadFile(image, "announcements", tournament.getId().toString());
@@ -120,6 +128,10 @@ public class AnnouncementService {
         }
 
         announcementMapper.updateAnnouncement(announcementFormDto, announcement);
+
+        if (announcementFormDto.tags() != null) {
+            announcement.setTags(tagService.findOrCreateTags(TagType.ANNOUNCEMENT, announcementFormDto.tags()));
+        }
 
         return announcementRepository.save(announcement);
     }

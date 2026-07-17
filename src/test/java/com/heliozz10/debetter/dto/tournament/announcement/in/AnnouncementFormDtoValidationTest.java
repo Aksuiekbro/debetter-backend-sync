@@ -30,7 +30,7 @@ class AnnouncementFormDtoValidationTest {
                 4. Аяжан х vs Гүлжамал х 520 каб Төреші Алтынбек м
                 """;
 
-        Set<ConstraintViolation<AnnouncementFormDto>> violations = validator.validate(new AnnouncementFormDto(title, content));
+        Set<ConstraintViolation<AnnouncementFormDto>> violations = validator.validate(new AnnouncementFormDto(title, content, null));
 
         assertTrue(violations.isEmpty(), () -> "Expected the announcement to be valid, but got: " + violations);
     }

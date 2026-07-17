@@ -6,6 +6,7 @@ import com.heliozz10.debetter.dto.tournament.announcement.out.AnnouncementView;
 import com.heliozz10.debetter.mapper.TagMapper;
 import com.heliozz10.debetter.mapper.user.profile.OrganizerProfileMapper;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 
@@ -21,7 +22,10 @@ import java.util.List;
         }
 )
 public interface AnnouncementMapper {
+    @Mapping(target = "tags", ignore = true)
     Announcement toAnnouncement(AnnouncementFormDto dto);
+
+    @Mapping(target = "tags", ignore = true)
     void updateAnnouncement(AnnouncementFormDto dto, @MappingTarget Announcement announcement);
 
     AnnouncementView toAnnouncementView(Announcement announcement);
