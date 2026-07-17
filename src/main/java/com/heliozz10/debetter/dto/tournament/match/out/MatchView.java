@@ -30,6 +30,8 @@ public class MatchView {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Integer debater2Score;
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Long winnerParticipantId;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     private List<ParticipantScoreView> team1ParticipantScores;
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private List<ParticipantScoreView> team2ParticipantScores;

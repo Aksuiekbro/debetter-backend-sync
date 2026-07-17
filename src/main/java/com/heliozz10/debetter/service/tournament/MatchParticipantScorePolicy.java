@@ -4,6 +4,7 @@ import com.heliozz10.debetter.content.tournament.DebateFormat;
 import com.heliozz10.debetter.content.tournament.TournamentParticipant;
 import com.heliozz10.debetter.content.tournament.match.Match;
 import com.heliozz10.debetter.content.tournament.match.MatchParticipantScore;
+import com.heliozz10.debetter.content.tournament.round.RoundGroupType;
 import com.heliozz10.debetter.content.tournament.team.Team;
 
 import java.util.Arrays;
@@ -34,6 +35,13 @@ public final class MatchParticipantScorePolicy {
     public static boolean isTeamFormat(Match match) {
         DebateFormat format = resolveFormat(match);
         return format != null && format != DebateFormat.LD;
+    }
+
+    public static boolean isPreliminaryMatch(Match match) {
+        return match != null
+                && match.getRound() != null
+                && match.getRound().getRoundGroup() != null
+                && match.getRound().getRoundGroup().getType() == RoundGroupType.PRELIMINARY;
     }
 
     public static int requiredTeamCount(Match match) {

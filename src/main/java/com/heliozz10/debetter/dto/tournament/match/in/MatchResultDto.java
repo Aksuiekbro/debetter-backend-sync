@@ -9,5 +9,14 @@ import java.util.List;
 public record MatchResultDto(
         @NotNull @Positive Long matchId,
         @Valid List<TeamResultDto> teamResults,
-        @Valid List<ParticipantScoreDto> participantScores
-) {}
+        @Valid List<ParticipantScoreDto> participantScores,
+        @Positive Long winnerParticipantId
+) {
+    public MatchResultDto(
+            Long matchId,
+            List<TeamResultDto> teamResults,
+            List<ParticipantScoreDto> participantScores
+    ) {
+        this(matchId, teamResults, participantScores, null);
+    }
+}

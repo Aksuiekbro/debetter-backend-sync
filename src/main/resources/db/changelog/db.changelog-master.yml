@@ -7,3 +7,5 @@ databaseChangeLog:
       file: db/changelog/restrict_standings_to_preliminary.sql
   - include:
       file: db/changelog/add_match_participant_scores.sql
+  - include:
+      file: db/changelog/add_match_winner_participant.sql

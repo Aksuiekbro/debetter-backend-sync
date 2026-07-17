@@ -95,14 +95,26 @@ public class RoundService {
                     || format != DebateFormat.LD
                     || match.getDebater1() == null
                     || match.getDebater2() == null
-                    || Objects.equals(match.getDebater1().getId(), match.getDebater2().getId())
-                    || match.getDebater1Score() == null
-                    || match.getDebater2Score() == null
-                    || Objects.equals(match.getDebater1Score(), match.getDebater2Score())) {
-                throw new IllegalStateException("A completed LD match requires two distinct debater scores.");
+                    || Objects.equals(match.getDebater1().getId(), match.getDebater2().getId())) {
+                throw new IllegalStateException("A completed LD match requires one winning debater.");
             }
-            return match.getDebater1Score() > match.getDebater2Score()
-                    ? match.getDebater1() : match.getDebater2();
+
+            if(Objects.equals(match.getWinnerParticipantId(), match.getDebater1().getId())) {
+                return match.getDebater1();
+            }
+            if(Objects.equals(match.getWinnerParticipantId(), match.getDebater2().getId())) {
+                return match.getDebater2();
+            }
+            if(match.getWinnerParticipantId() == null
+                    && match.getDebater1Score() != null
+                    && match.getDebater2Score() != null
+                    && !Objects.equals(match.getDebater1Score(), match.getDebater2Score())) {
+                return match.getDebater1Score() > match.getDebater2Score()
+                        ? match.getDebater1()
+                        : match.getDebater2();
+            }
+
+            throw new IllegalStateException("A completed LD match requires one winning debater.");
         }).toList();
     }
 

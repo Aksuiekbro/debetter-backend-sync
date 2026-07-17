@@ -270,10 +270,12 @@ public class MatchService {
                         if (slot == null) continue;
                         int idx = slot - 1;
                         List<ParticipantScoreDto> ps = teamResult.participantScores();
-                        teamScores[idx] = ps.stream()
-                                .map(ParticipantScoreDto::score)
-                                .filter(Objects::nonNull)
-                                .reduce(0, Integer::sum);
+                        teamScores[idx] = ps == null || ps.isEmpty()
+                                ? null
+                                : ps.stream()
+                                    .map(ParticipantScoreDto::score)
+                                    .filter(Objects::nonNull)
+                                    .reduce(0, Integer::sum);
                         teamWons[idx] = teamResult.won();
                     }
                 }
@@ -300,13 +302,22 @@ public class MatchService {
             });
 
             matchRepository.updateMatchScoresBulk(arrayNode.toString());
+
+            newResults.forEach(result -> {
+                if(result.winnerParticipantId() != null) {
+                    matchRepository.updateWinnerParticipantId(result.matchId(), result.winnerParticipantId());
+                }
+            });
         }
 
         results.forEach(result -> {
             if (result.teamResults() == null) return;
             Match match = matchesById.get(result.matchId());
+            if(!isPreliminaryMatch(match) && !Boolean.TRUE.equals(legacyRepairsByMatchId.get(result.matchId()))) {
+                return;
+            }
             persistTeamParticipantScores(match, result.teamResults());
-            if(Boolean.TRUE.equals(legacyRepairsByMatchId.get(result.matchId())) || !isPreliminaryMatch(match)) {
+            if(Boolean.TRUE.equals(legacyRepairsByMatchId.get(result.matchId()))) {
                 return;
             }
             result.teamResults().forEach(teamResult -> {
@@ -321,14 +332,12 @@ public class MatchService {
     }
 
     private boolean isPreliminaryMatch(Match match) {
-        return match != null
-                && match.getRound() != null
-                && match.getRound().getRoundGroup() != null
-                && match.getRound().getRoundGroup().getType() == RoundGroupType.PRELIMINARY;
+        return MatchParticipantScorePolicy.isPreliminaryMatch(match);
     }
 
     private boolean isLegacyTeamScoreRepair(Match match) {
         if(match == null
+                || !isPreliminaryMatch(match)
                 || !Boolean.TRUE.equals(match.getCompleted())
                 || !MatchParticipantScorePolicy.isTeamFormat(match)
                 || !MatchParticipantScorePolicy.hasRepairableAggregateResult(match)) {
@@ -422,21 +431,47 @@ public class MatchService {
 
         if(format == DebateFormat.LD) {
             if(result.teamResults() != null && !result.teamResults().isEmpty()) {
-                throw new IllegalArgumentException("LD results must contain participant scores only.");
+                throw new IllegalArgumentException("LD results cannot contain team results.");
             }
             if(match.getDebater1() == null || match.getDebater2() == null) {
                 throw new IllegalStateException("LD match does not have two debater slots.");
             }
 
-            List<ParticipantScoreDto> scores = result.participantScores();
-            validateParticipantScores(scores, List.of(match.getDebater1(), match.getDebater2()));
+            if(isPreliminaryMatch(match)) {
+                if(result.winnerParticipantId() != null) {
+                    throw new IllegalArgumentException("Preliminary LD results cannot identify a winner without speaker points.");
+                }
 
-            Map<Long, Integer> scoreByParticipant = scores.stream()
-                    .collect(Collectors.toMap(ParticipantScoreDto::participantId, ParticipantScoreDto::score));
-            if(Objects.equals(scoreByParticipant.get(match.getDebater1().getId()), scoreByParticipant.get(match.getDebater2().getId()))) {
-                throw new IllegalArgumentException("LD results cannot be tied.");
+                List<ParticipantScoreDto> scores = result.participantScores();
+                validateParticipantScores(scores, List.of(match.getDebater1(), match.getDebater2()));
+                Map<Long, Integer> scoreByParticipant = scores.stream()
+                        .collect(Collectors.toMap(ParticipantScoreDto::participantId, ParticipantScoreDto::score));
+                if(Objects.equals(
+                        scoreByParticipant.get(match.getDebater1().getId()),
+                        scoreByParticipant.get(match.getDebater2().getId()))) {
+                    throw new IllegalArgumentException("LD results cannot be tied.");
+                }
+                return;
+            }
+
+            RoundGroupType roundGroupType = match.getRound().getRoundGroup().getType();
+            if(roundGroupType != RoundGroupType.SOLO_ELIMINATION) {
+                throw new IllegalStateException("LD Win/Loss results are only supported in solo elimination.");
+            }
+
+            if(result.participantScores() != null && !result.participantScores().isEmpty()) {
+                throw new IllegalArgumentException("LD elimination results must not contain speaker points.");
+            }
+            if(result.winnerParticipantId() == null
+                    || (!Objects.equals(result.winnerParticipantId(), match.getDebater1().getId())
+                        && !Objects.equals(result.winnerParticipantId(), match.getDebater2().getId()))) {
+                throw new IllegalArgumentException("LD results must identify exactly one participating winner.");
             }
             return;
+        }
+
+        if(result.winnerParticipantId() != null) {
+            throw new IllegalArgumentException("Team-format results cannot identify an individual winner.");
         }
 
         if(result.participantScores() != null && !result.participantScores().isEmpty()) {
@@ -474,11 +509,19 @@ public class MatchService {
             throw new IllegalArgumentException("Exactly " + requiredWinnerCount + " teams must be marked as winners.");
         }
 
-        Map<Long, Team> teamsById = teams.stream().collect(Collectors.toMap(Team::getId, team -> team));
-        teamResults.forEach(teamResult -> validateParticipantScores(
-                teamResult.participantScores(),
-                Optional.ofNullable(teamsById.get(teamResult.teamId()).getMembers()).orElse(List.of())
-        ));
+        if(isPreliminaryMatch(match)) {
+            Map<Long, Team> teamsById = teams.stream().collect(Collectors.toMap(Team::getId, team -> team));
+            teamResults.forEach(teamResult -> validateParticipantScores(
+                    teamResult.participantScores(),
+                    Optional.ofNullable(teamsById.get(teamResult.teamId()).getMembers()).orElse(List.of())
+            ));
+            return;
+        }
+
+        if(teamResults.stream().anyMatch(teamResult ->
+                teamResult.participantScores() != null && !teamResult.participantScores().isEmpty())) {
+            throw new IllegalArgumentException("Team elimination results must not contain speaker points.");
+        }
     }
 
     private void validateParticipantScores(List<ParticipantScoreDto> scores, List<TournamentParticipant> participants) {

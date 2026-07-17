@@ -3,6 +3,7 @@ package com.heliozz10.debetter.service.tournament.round;
 import com.heliozz10.debetter.content.tournament.DebateFormat;
 import com.heliozz10.debetter.content.tournament.Judge;
 import com.heliozz10.debetter.content.tournament.Tournament;
+import com.heliozz10.debetter.content.tournament.TournamentParticipant;
 import com.heliozz10.debetter.content.tournament.match.Match;
 import com.heliozz10.debetter.content.tournament.round.Round;
 import com.heliozz10.debetter.content.tournament.round.RoundGroup;
@@ -227,6 +228,51 @@ class RoundServiceTest {
         );
 
         assertEquals("A completed APF match must have exactly 1 winner.", exception.getMessage());
+    }
+
+    @Test
+    void getMatchWinnerDebatersUsesTheExplicitSoloWinner() {
+        TournamentParticipant debater1 = new TournamentParticipant();
+        debater1.setId(701L);
+        TournamentParticipant debater2 = new TournamentParticipant();
+        debater2.setId(702L);
+        RoundGroup group = new RoundGroup();
+        group.setType(RoundGroupType.SOLO_ELIMINATION);
+        group.setFormat(DebateFormat.LD);
+        Round round = new Round();
+        round.setRoundGroup(group);
+        Match match = new Match();
+        match.setRound(round);
+        match.setDebater1(debater1);
+        match.setDebater2(debater2);
+        match.setWinnerParticipantId(702L);
+        match.setCompleted(true);
+        when(matchRepository.findByRoundId(201L)).thenReturn(List.of(match));
+
+        assertEquals(List.of(debater2), roundService.getMatchWinnerDebaters(201L));
+    }
+
+    @Test
+    void getMatchWinnerDebatersFallsBackToLegacyDistinctScores() {
+        TournamentParticipant debater1 = new TournamentParticipant();
+        debater1.setId(701L);
+        TournamentParticipant debater2 = new TournamentParticipant();
+        debater2.setId(702L);
+        RoundGroup group = new RoundGroup();
+        group.setType(RoundGroupType.SOLO_ELIMINATION);
+        group.setFormat(DebateFormat.LD);
+        Round round = new Round();
+        round.setRoundGroup(group);
+        Match match = new Match();
+        match.setRound(round);
+        match.setDebater1(debater1);
+        match.setDebater2(debater2);
+        match.setDebater1Score(69);
+        match.setDebater2Score(71);
+        match.setCompleted(true);
+        when(matchRepository.findByRoundId(201L)).thenReturn(List.of(match));
+
+        assertEquals(List.of(debater2), roundService.getMatchWinnerDebaters(201L));
     }
 
     private static Round pairingRound() {

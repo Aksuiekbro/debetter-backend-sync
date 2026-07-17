@@ -34,9 +34,11 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
@@ -304,14 +306,14 @@ class MatchServiceTest {
     }
 
     @Test
-    void submitMatchResultsEliminationBallotPersistsMatchAndSpeakerRowsWithoutChangingPreliminarySpeakerTotals() {
+    void submitMatchResultsEliminationBallotPersistsOnlyWinLoseOutcomes() throws Exception {
         Match match = teamMatchWithTwoMembers(301L);
         match.getRound().getRoundGroup().setType(RoundGroupType.TEAM_ELIMINATION);
         List<MatchResultDto> results = List.of(new MatchResultDto(
                 301L,
                 List.of(
-                        teamResult(501L, true, 601L, 70, 603L, 71),
-                        teamResult(502L, false, 602L, 72, 604L, 73)
+                        new TeamResultDto(501L, true, null),
+                        new TeamResultDto(502L, false, null)
                 ),
                 null
         ));
@@ -320,9 +322,69 @@ class MatchServiceTest {
 
         matchService.submitMatchResults(53L, 101L, 201L, results);
 
-        verify(matchRepository).updateMatchScoresBulk(org.mockito.ArgumentMatchers.anyString());
-        verify(matchParticipantScoreRepository).saveAll(org.mockito.ArgumentMatchers.anyList());
+        ArgumentCaptor<String> resultCaptor = ArgumentCaptor.forClass(String.class);
+        verify(matchRepository).updateMatchScoresBulk(resultCaptor.capture());
+        assertTrue(new ObjectMapper().readTree(resultCaptor.getValue()).get(0).get("team1score").isNull());
+        assertTrue(new ObjectMapper().readTree(resultCaptor.getValue()).get(0).get("team2score").isNull());
+        assertTrue(new ObjectMapper().readTree(resultCaptor.getValue()).get(0).get("team1won").asBoolean());
+        assertFalse(new ObjectMapper().readTree(resultCaptor.getValue()).get(0).get("team2won").asBoolean());
+        verify(matchParticipantScoreRepository, never()).saveAll(org.mockito.ArgumentMatchers.anyList());
         verify(tournamentParticipantRepository, never()).addSpeakerScore(anyLong(), anyInt());
+    }
+
+    @Test
+    void submitMatchResultsBpfEliminationPersistsTwoWinnersWithoutSpeakerPoints() throws Exception {
+        Match match = bpfMatchWithTwoMembers(302L);
+        match.getRound().getRoundGroup().setType(RoundGroupType.TEAM_ELIMINATION);
+        List<MatchResultDto> results = List.of(new MatchResultDto(
+                302L,
+                List.of(
+                        new TeamResultDto(501L, true, null),
+                        new TeamResultDto(502L, true, null),
+                        new TeamResultDto(503L, false, null),
+                        new TeamResultDto(504L, false, null)
+                ),
+                null
+        ));
+        when(matchRepository.countMatchesInRound(53L, 101L, 201L, List.of(302L))).thenReturn(1L);
+        when(matchRepository.findAllByIdForUpdate(List.of(302L))).thenReturn(List.of(match));
+
+        matchService.submitMatchResults(53L, 101L, 201L, results);
+
+        ArgumentCaptor<String> resultCaptor = ArgumentCaptor.forClass(String.class);
+        verify(matchRepository).updateMatchScoresBulk(resultCaptor.capture());
+        var payload = new ObjectMapper().readTree(resultCaptor.getValue()).get(0);
+        assertTrue(payload.get("team1won").asBoolean());
+        assertTrue(payload.get("team2won").asBoolean());
+        assertFalse(payload.get("team3won").asBoolean());
+        assertFalse(payload.get("team4won").asBoolean());
+        assertTrue(payload.get("team1score").isNull());
+        assertTrue(payload.get("team4score").isNull());
+        verify(matchParticipantScoreRepository, never()).saveAll(org.mockito.ArgumentMatchers.anyList());
+        verify(tournamentParticipantRepository, never()).addSpeakerScore(anyLong(), anyInt());
+    }
+
+    @Test
+    void submitMatchResultsPreliminaryBallotStillRequiresSpeakerPoints() {
+        Match match = teamMatchWithTwoMembers(301L);
+        List<MatchResultDto> results = List.of(new MatchResultDto(
+                301L,
+                List.of(
+                        new TeamResultDto(501L, true, null),
+                        new TeamResultDto(502L, false, null)
+                ),
+                null
+        ));
+        when(matchRepository.countMatchesInRound(53L, 101L, 201L, List.of(301L))).thenReturn(1L);
+        when(matchRepository.findAllByIdForUpdate(List.of(301L))).thenReturn(List.of(match));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> matchService.submitMatchResults(53L, 101L, 201L, results)
+        );
+
+        assertEquals("A score is required for every participating debater.", exception.getMessage());
+        verify(matchRepository, never()).updateMatchScoresBulk(org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -465,8 +527,46 @@ class MatchServiceTest {
     }
 
     @Test
-    void submitMatchResultsRejectsTiedLdBallot() {
+    void submitMatchResultsAcceptsOneExplicitLdWinnerWithoutSpeakerPoints() {
         Match match = ldMatch(303L);
+        List<MatchResultDto> results = List.of(new MatchResultDto(
+                303L,
+                null,
+                null,
+                701L
+        ));
+        when(matchRepository.countMatchesInRound(53L, 101L, 201L, List.of(303L))).thenReturn(1L);
+        when(matchRepository.findAllByIdForUpdate(List.of(303L))).thenReturn(List.of(match));
+
+        matchService.submitMatchResults(53L, 101L, 201L, results);
+
+        verify(matchRepository).updateMatchScoresBulk(org.mockito.ArgumentMatchers.anyString());
+        verify(matchRepository).updateWinnerParticipantId(303L, 701L);
+        verify(matchParticipantScoreRepository, never()).saveAll(org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
+    void submitMatchResultsPreliminaryLdStillAcceptsDistinctSpeakerPoints() {
+        Match match = ldMatch(303L);
+        match.getRound().getRoundGroup().setType(RoundGroupType.PRELIMINARY);
+        List<MatchResultDto> results = List.of(new MatchResultDto(
+                303L,
+                null,
+                List.of(new ParticipantScoreDto(701L, 75), new ParticipantScoreDto(702L, 74))
+        ));
+        when(matchRepository.countMatchesInRound(53L, 101L, 201L, List.of(303L))).thenReturn(1L);
+        when(matchRepository.findAllByIdForUpdate(List.of(303L))).thenReturn(List.of(match));
+
+        matchService.submitMatchResults(53L, 101L, 201L, results);
+
+        verify(matchRepository).updateMatchScoresBulk(org.mockito.ArgumentMatchers.anyString());
+        verify(matchRepository, never()).updateWinnerParticipantId(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void submitMatchResultsPreliminaryLdStillRejectsTiedSpeakerPoints() {
+        Match match = ldMatch(303L);
+        match.getRound().getRoundGroup().setType(RoundGroupType.PRELIMINARY);
         List<MatchResultDto> results = List.of(new MatchResultDto(
                 303L,
                 null,
@@ -481,6 +581,22 @@ class MatchServiceTest {
         );
 
         assertEquals("LD results cannot be tied.", exception.getMessage());
+        verify(matchRepository, never()).updateMatchScoresBulk(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void submitMatchResultsRejectsLdWinnerOutsideTheMatch() {
+        Match match = ldMatch(303L);
+        List<MatchResultDto> results = List.of(new MatchResultDto(303L, null, null, 999L));
+        when(matchRepository.countMatchesInRound(53L, 101L, 201L, List.of(303L))).thenReturn(1L);
+        when(matchRepository.findAllByIdForUpdate(List.of(303L))).thenReturn(List.of(match));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> matchService.submitMatchResults(53L, 101L, 201L, results)
+        );
+
+        assertEquals("LD results must identify exactly one participating winner.", exception.getMessage());
         verify(matchRepository, never()).updateMatchScoresBulk(org.mockito.ArgumentMatchers.anyString());
     }
 
@@ -662,6 +778,7 @@ class MatchServiceTest {
 
     private static Match ldMatch(Long id) {
         com.heliozz10.debetter.content.tournament.round.RoundGroup group = new com.heliozz10.debetter.content.tournament.round.RoundGroup();
+        group.setType(RoundGroupType.SOLO_ELIMINATION);
         group.setFormat(com.heliozz10.debetter.content.tournament.DebateFormat.LD);
         Round round = new Round();
         round.setRoundGroup(group);

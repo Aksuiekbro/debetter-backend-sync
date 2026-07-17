@@ -136,6 +136,9 @@ public class Match {
     @Column
     private Integer debater2Score;
 
+    @Column(name = "winner_participant_id")
+    private Long winnerParticipantId;
+
     @Column
     private Boolean team1Won;
 

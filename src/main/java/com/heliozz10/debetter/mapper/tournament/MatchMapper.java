@@ -56,6 +56,7 @@ public interface MatchMapper {
         }
 
         if (!MatchParticipantScorePolicy.isTeamFormat(match)
+                || !MatchParticipantScorePolicy.isPreliminaryMatch(match)
                 || MatchParticipantScorePolicy.expectedParticipants(match).isEmpty()) {
             view.setParticipantScoresComplete(null);
             view.setParticipantScoresRepairable(null);
@@ -108,6 +109,7 @@ public interface MatchMapper {
         view.setTeam4Won(null);
         view.setDebater1Score(null);
         view.setDebater2Score(null);
+        view.setWinnerParticipantId(null);
         view.setTeam1ParticipantScores(null);
         view.setTeam2ParticipantScores(null);
         view.setTeam3ParticipantScores(null);
