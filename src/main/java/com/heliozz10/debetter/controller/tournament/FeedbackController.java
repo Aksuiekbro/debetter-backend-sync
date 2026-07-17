@@ -9,13 +9,16 @@ import com.heliozz10.debetter.dto.tournament.in.FeedbackGetParams;
 import com.heliozz10.debetter.dto.tournament.out.FeedbackView;
 import com.heliozz10.debetter.mapper.tournament.FeedbackMapper;
 import com.heliozz10.debetter.service.tournament.FeedbackService;
+import com.heliozz10.debetter.validation.OnCreate;
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RequiredArgsConstructor
@@ -46,7 +49,7 @@ public class FeedbackController {
 
     @PreAuthorize("principal.role.name() == 'PARTICIPANT' and @tournamentSecurity.hasViewPermission(principal, #tournamentId)")
     @PostMapping
-    public FeedbackView addFeedback(@PathVariable Long tournamentId, @Valid @RequestBody FeedbackDto dto, Authentication authentication) {
+    public FeedbackView addFeedback(@PathVariable Long tournamentId, @Validated({OnCreate.class, Default.class}) @RequestBody FeedbackDto dto, Authentication authentication) {
         User user = (User) authentication.getPrincipal();
         ParticipantProfile profile = (ParticipantProfile) user.getProfile();
         return feedbackService.toFeedbackView(feedbackService.addFeedbackToTournament(dto, tournamentId, profile.getId()));

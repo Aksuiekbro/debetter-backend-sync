@@ -9,6 +9,7 @@ import com.heliozz10.debetter.mapper.tournament.JudgeMapper;
 import com.heliozz10.debetter.service.tournament.JudgeService;
 import com.heliozz10.debetter.validation.OnCreate;
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -47,7 +48,7 @@ public class JudgeController {
 
     @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #tournamentId)")
     @PostMapping
-    public JudgeView addJudgeToTournament(@PathVariable Long tournamentId, @Validated(OnCreate.class) @RequestBody JudgeFormDto judgeFormDto) {
+    public JudgeView addJudgeToTournament(@PathVariable Long tournamentId, @Validated({OnCreate.class, Default.class}) @RequestBody JudgeFormDto judgeFormDto) {
         return judgeMapper.toJudgeView(judgeService.addJudgeToTournament(judgeFormDto, tournamentId));
     }
 

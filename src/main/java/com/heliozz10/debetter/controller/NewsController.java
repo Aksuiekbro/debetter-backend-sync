@@ -8,13 +8,16 @@ import com.heliozz10.debetter.dto.in.NewsDto;
 import com.heliozz10.debetter.dto.in.NewsGetParams;
 import com.heliozz10.debetter.dto.out.NewsView;
 import com.heliozz10.debetter.service.NewsService;
+import com.heliozz10.debetter.validation.OnCreate;
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -46,7 +49,7 @@ public class NewsController {
 
     @PreAuthorize("principal.role.name() == 'ORGANIZER'")
     @PostMapping
-    public NewsView createNews(@Valid @RequestPart("data") NewsDto dto, @RequestPart(value = "thumbnail", required = false) MultipartFile thumbnail, @RequestPart(value = "images", required = false) List<MultipartFile> images, Authentication authentication) {
+    public NewsView createNews(@Validated({OnCreate.class, Default.class}) @RequestPart("data") NewsDto dto, @RequestPart(value = "thumbnail", required = false) MultipartFile thumbnail, @RequestPart(value = "images", required = false) List<MultipartFile> images, Authentication authentication) {
         List<MultipartFile> galleryImages = images == null ? List.of() : images;
         if(galleryImages.size() > 10) {
             throw new IllegalArgumentException("Too many images");
