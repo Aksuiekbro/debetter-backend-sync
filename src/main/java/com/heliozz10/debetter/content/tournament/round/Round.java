@@ -75,6 +75,7 @@ public class Round {
     private List<TournamentParticipant> debaters;
 
     @OneToMany(mappedBy = "round", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
     private List<Match> matches;
 
     public Round(RoundGroup roundGroup, String name, int roundNumber) {

@@ -120,7 +120,7 @@ public class RoundService {
 
     @Transactional(readOnly = true)
     public List<Round> getRoundsByTournamentIdAndRoundGroupId(Long tournamentId, Long roundGroupId) {
-        return roundRepository.findByRoundGroup_Tournament_IdAndRoundGroup_Id(tournamentId, roundGroupId);
+        return roundRepository.findByRoundGroup_Tournament_IdAndRoundGroup_IdOrderByRoundNumberAsc(tournamentId, roundGroupId);
     }
 
     @Transactional(readOnly = true)

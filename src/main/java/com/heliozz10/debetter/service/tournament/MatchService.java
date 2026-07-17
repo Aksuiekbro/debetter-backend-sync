@@ -26,7 +26,9 @@ import com.heliozz10.debetter.security.tournament.TournamentSecurity;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,9 +50,16 @@ public class MatchService {
 
     private final ObjectMapper objectMapper;
 
+    // Unsorted pages come back in unspecified SQL order, so rows can shuffle
+    // between refetches; default to a stable id order.
+    private Pageable withStableOrder(Pageable pageable) {
+        if (pageable.getSort().isSorted()) return pageable;
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by(Sort.Direction.ASC, "id"));
+    }
+
     @Transactional(readOnly = true)
     public Page<Match> getMatchesByRoundId(Long roundId, Pageable pageable) {
-        return matchRepository.findByRoundId(roundId, pageable);
+        return matchRepository.findByRoundId(roundId, withStableOrder(pageable));
     }
 
     @Transactional(readOnly = true)
@@ -65,7 +74,7 @@ public class MatchService {
                 .orElseThrow(() -> new EntityNotFoundException("Round not found"));
 
         if(Boolean.TRUE.equals(round.getMatchesArePublic()) || hasTournamentViewPermission(authentication, tournamentId)) {
-            return matchRepository.findByRoundId(roundId, pageable);
+            return matchRepository.findByRoundId(roundId, withStableOrder(pageable));
         }
 
         return Page.empty(pageable);

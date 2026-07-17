@@ -49,7 +49,7 @@ public interface RoundRepository extends JpaRepository<Round, Long> {
 
     Optional<Round> findByRoundGroup_Tournament_IdAndId(Long id, Long id1);
 
-    List<Round> findByRoundGroup_Tournament_IdAndRoundGroup_Id(Long id, Long id1);
+    List<Round> findByRoundGroup_Tournament_IdAndRoundGroup_IdOrderByRoundNumberAsc(Long id, Long id1);
 
     @EntityGraph(value = "Round.forView", type = EntityGraph.EntityGraphType.LOAD)
     Optional<Round> findByRoundGroup_Tournament_IdAndRoundGroup_IdAndId(Long id, Long id1, Long id2);

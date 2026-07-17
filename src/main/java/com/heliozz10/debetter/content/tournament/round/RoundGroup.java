@@ -52,6 +52,7 @@ public class RoundGroup {
     private DebateFormat format;
 
     @OneToMany(mappedBy = "roundGroup", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("roundNumber ASC")
     private List<Round> rounds;
 
     @Column

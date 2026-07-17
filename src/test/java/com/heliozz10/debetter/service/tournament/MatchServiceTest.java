@@ -29,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
 import java.util.Optional;
@@ -95,7 +96,7 @@ class MatchServiceTest {
         Page<Match> matches = matchService.getVisibleMatchesByRoundId(53L, 101L, 201L, null, PageRequest.of(0, 10));
 
         assertEquals(0, matches.getTotalElements());
-        verify(matchRepository, never()).findByRoundId(201L, PageRequest.of(0, 10));
+        verify(matchRepository, never()).findByRoundId(201L, PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "id")));
     }
 
     @Test
@@ -105,7 +106,7 @@ class MatchServiceTest {
         Match match = new Match();
         when(roundRepository.findByRoundGroup_Tournament_IdAndRoundGroup_IdAndId(53L, 101L, 201L))
                 .thenReturn(Optional.of(round));
-        when(matchRepository.findByRoundId(201L, PageRequest.of(0, 10)))
+        when(matchRepository.findByRoundId(201L, PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "id"))))
                 .thenReturn(new PageImpl<>(List.of(match)));
 
         Page<Match> matches = matchService.getVisibleMatchesByRoundId(53L, 101L, 201L, null, PageRequest.of(0, 10));
