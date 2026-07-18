@@ -23,5 +23,6 @@ public record TournamentFormDto(
         @NotNull(groups = {OnCreate.class}) DebateFormat preliminaryFormat,
         @NotNull(groups = {OnCreate.class}) DebateFormat teamEliminationFormat,
         @NotNull(groups = {OnCreate.class}) @Positive Integer preliminaryRoundCount,
-        @NotNull(groups = {OnCreate.class}) @Positive Integer eliminationRoundCount
+        @NotNull(groups = {OnCreate.class}) @Positive Integer eliminationRoundCount,
+        Boolean ldEnabled
 ) { }

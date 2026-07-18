@@ -148,7 +148,7 @@ public class TournamentService {
 
         Tournament persistedTournament = tournamentRepository.save(tournament);
 
-        generateRounds(persistedTournament, dto.preliminaryRoundCount(), dto.eliminationRoundCount());
+        generateRounds(persistedTournament, dto.preliminaryRoundCount(), dto.eliminationRoundCount(), !Boolean.FALSE.equals(dto.ldEnabled()));
 
         if(image != null) {
             Url url = fileService.uploadFile(image, "tournaments/thumbnails", persistedTournament.getId().toString());
@@ -161,7 +161,7 @@ public class TournamentService {
     }
 
     @Transactional
-    private void generateRounds(Tournament tournament, int preliminaryRoundCount, int eliminationRoundCount) {
+    private void generateRounds(Tournament tournament, int preliminaryRoundCount, int eliminationRoundCount, boolean ldEnabled) {
         List<RoundGroup> roundGroups = new ArrayList<>();
         List<Round> rounds = new ArrayList<>();
 
@@ -174,12 +174,15 @@ public class TournamentService {
             preliminaryRound.setRoundGroup(preliminaryRoundGroup);
         }
 
-        RoundGroup soloEliminationRoundGroup = new RoundGroup(tournament, RoundGroupType.SOLO_ELIMINATION, DebateFormat.LD);
-        roundGroups.add(soloEliminationRoundGroup);
-        for(int i = 0; i < eliminationRoundCount; i++) {
-            Round soloEliminationRound = new Round(soloEliminationRoundGroup, i == eliminationRoundCount - 1 ? "Final" : "1/" + (int) Math.pow(2, (eliminationRoundCount - 1 - i)), i + 1);
-            rounds.add(soloEliminationRound);
-            soloEliminationRound.setRoundGroup(soloEliminationRoundGroup);
+        // LD is optional: the solo bracket exists only when the organizer enabled it at creation.
+        if(ldEnabled) {
+            RoundGroup soloEliminationRoundGroup = new RoundGroup(tournament, RoundGroupType.SOLO_ELIMINATION, DebateFormat.LD);
+            roundGroups.add(soloEliminationRoundGroup);
+            for(int i = 0; i < eliminationRoundCount; i++) {
+                Round soloEliminationRound = new Round(soloEliminationRoundGroup, i == eliminationRoundCount - 1 ? "Final" : "1/" + (int) Math.pow(2, (eliminationRoundCount - 1 - i)), i + 1);
+                rounds.add(soloEliminationRound);
+                soloEliminationRound.setRoundGroup(soloEliminationRoundGroup);
+            }
         }
 
         RoundGroup teamEliminationRoundGroup = new RoundGroup(tournament, RoundGroupType.TEAM_ELIMINATION, tournament.getTeamEliminationFormat());
