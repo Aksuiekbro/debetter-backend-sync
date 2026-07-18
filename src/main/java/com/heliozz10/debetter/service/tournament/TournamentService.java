@@ -148,7 +148,8 @@ public class TournamentService {
 
         Tournament persistedTournament = tournamentRepository.save(tournament);
 
-        generateRounds(persistedTournament, dto.preliminaryRoundCount(), dto.eliminationRoundCount(), !Boolean.FALSE.equals(dto.ldEnabled()));
+        int ldRoundCount = dto.ldRoundCount() != null ? dto.ldRoundCount() : dto.eliminationRoundCount();
+        generateRounds(persistedTournament, dto.preliminaryRoundCount(), dto.eliminationRoundCount(), !Boolean.FALSE.equals(dto.ldEnabled()), ldRoundCount);
 
         if(image != null) {
             Url url = fileService.uploadFile(image, "tournaments/thumbnails", persistedTournament.getId().toString());
@@ -161,7 +162,7 @@ public class TournamentService {
     }
 
     @Transactional
-    private void generateRounds(Tournament tournament, int preliminaryRoundCount, int eliminationRoundCount, boolean ldEnabled) {
+    private void generateRounds(Tournament tournament, int preliminaryRoundCount, int eliminationRoundCount, boolean ldEnabled, int ldRoundCount) {
         List<RoundGroup> roundGroups = new ArrayList<>();
         List<Round> rounds = new ArrayList<>();
 
@@ -178,8 +179,8 @@ public class TournamentService {
         if(ldEnabled) {
             RoundGroup soloEliminationRoundGroup = new RoundGroup(tournament, RoundGroupType.SOLO_ELIMINATION, DebateFormat.LD);
             roundGroups.add(soloEliminationRoundGroup);
-            for(int i = 0; i < eliminationRoundCount; i++) {
-                Round soloEliminationRound = new Round(soloEliminationRoundGroup, i == eliminationRoundCount - 1 ? "Final" : "1/" + (int) Math.pow(2, (eliminationRoundCount - 1 - i)), i + 1);
+            for(int i = 0; i < ldRoundCount; i++) {
+                Round soloEliminationRound = new Round(soloEliminationRoundGroup, i == ldRoundCount - 1 ? "Final" : "1/" + (int) Math.pow(2, (ldRoundCount - 1 - i)), i + 1);
                 rounds.add(soloEliminationRound);
                 soloEliminationRound.setRoundGroup(soloEliminationRoundGroup);
             }

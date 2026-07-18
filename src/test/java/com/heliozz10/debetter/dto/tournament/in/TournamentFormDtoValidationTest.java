@@ -40,7 +40,8 @@ class TournamentFormDtoValidationTest {
                 DebateFormat.APF,
                 3,
                 5,
-                true
+                true,
+                4
         );
 
         Set<ConstraintViolation<TournamentFormDto>> violations = validator.validate(dto);
