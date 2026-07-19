@@ -2,6 +2,7 @@ package com.heliozz10.debetter.controller.tournament;
 
 import com.heliozz10.debetter.content.tournament.match.Match;
 import com.heliozz10.debetter.dto.common.out.PageableResult;
+import com.heliozz10.debetter.dto.tournament.match.in.MatchLocationDto;
 import com.heliozz10.debetter.dto.tournament.match.in.MatchResultDto;
 import com.heliozz10.debetter.dto.tournament.match.in.MatchUpdateDto;
 import com.heliozz10.debetter.dto.tournament.match.out.MatchView;
@@ -10,6 +11,7 @@ import com.heliozz10.debetter.security.tournament.TournamentSecurity;
 import com.heliozz10.debetter.service.tournament.MatchService;
 import com.heliozz10.debetter.service.tournament.round.RoundService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -72,6 +74,17 @@ public class MatchController {
             @Valid @RequestBody List<MatchResultDto> matchResultDto
     ) {
         matchService.submitMatchResults(tournamentId, roundGroupId, roundId, matchResultDto);
+    }
+
+    @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #tournamentId)")
+    @PatchMapping("/locations")
+    public void updateMatchLocations(
+            @PathVariable Long tournamentId,
+            @PathVariable Long roundGroupId,
+            @PathVariable Long roundId,
+            @Valid @RequestBody List<@NotNull MatchLocationDto> matchLocationDto
+    ) {
+        matchService.updateMatchLocations(tournamentId, roundGroupId, roundId, matchLocationDto);
     }
 
     @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #tournamentId)")

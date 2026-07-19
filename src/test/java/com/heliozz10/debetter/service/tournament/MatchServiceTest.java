@@ -8,6 +8,7 @@ import com.heliozz10.debetter.content.tournament.match.MatchParticipantScore;
 import com.heliozz10.debetter.content.tournament.round.Round;
 import com.heliozz10.debetter.content.tournament.round.RoundGroupType;
 import com.heliozz10.debetter.content.tournament.team.Team;
+import com.heliozz10.debetter.dto.tournament.match.in.MatchLocationDto;
 import com.heliozz10.debetter.dto.tournament.match.in.MatchUpdateDto;
 import com.heliozz10.debetter.dto.tournament.match.in.MatchResultDto;
 import com.heliozz10.debetter.dto.tournament.match.in.ParticipantScoreDto;
@@ -694,6 +695,93 @@ class MatchServiceTest {
 
         assertEquals("A team cannot occupy multiple slots in the same match", exception.getMessage());
         verify(matchRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void updateMatchLocationsTrimsLocationsAndClearsEmptyRooms() {
+        Match firstMatch = new Match();
+        firstMatch.setId(301L);
+        firstMatch.setLocation("Old room");
+        Match secondMatch = new Match();
+        secondMatch.setId(302L);
+        secondMatch.setLocation("Another room");
+        List<MatchLocationDto> locations = List.of(
+                new MatchLocationDto(301L, "  204  "),
+                new MatchLocationDto(302L, "   ")
+        );
+        when(matchRepository.countMatchesInRound(53L, 101L, 201L, List.of(301L, 302L))).thenReturn(2L);
+        when(matchRepository.findAllByIdForUpdate(List.of(301L, 302L))).thenReturn(List.of(firstMatch, secondMatch));
+
+        matchService.updateMatchLocations(53L, 101L, 201L, locations);
+
+        assertEquals("204", firstMatch.getLocation());
+        assertNull(secondMatch.getLocation());
+        verify(matchRepository).saveAll(org.mockito.ArgumentMatchers.anyCollection());
+    }
+
+    @Test
+    void updateMatchLocationsClearsRoomWithNull() {
+        Match match = new Match();
+        match.setId(301L);
+        match.setLocation("Old room");
+        List<MatchLocationDto> locations = List.of(new MatchLocationDto(301L, null));
+        when(matchRepository.countMatchesInRound(53L, 101L, 201L, List.of(301L))).thenReturn(1L);
+        when(matchRepository.findAllByIdForUpdate(List.of(301L))).thenReturn(List.of(match));
+
+        matchService.updateMatchLocations(53L, 101L, 201L, locations);
+
+        assertNull(match.getLocation());
+        verify(matchRepository).saveAll(org.mockito.ArgumentMatchers.anyCollection());
+    }
+
+    @Test
+    void updateMatchLocationsRejectsInvalidBatchBeforeChangingAnyRoom() {
+        Match match = new Match();
+        match.setId(301L);
+        match.setLocation("Original room");
+        List<MatchLocationDto> locations = List.of(
+                new MatchLocationDto(301L, "204"),
+                new MatchLocationDto(999L, "205")
+        );
+        when(matchRepository.countMatchesInRound(53L, 101L, 201L, List.of(301L, 999L))).thenReturn(1L);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> matchService.updateMatchLocations(53L, 101L, 201L, locations)
+        );
+
+        assertEquals("Some matches do not belong to the specified round.", exception.getMessage());
+        assertEquals("Original room", match.getLocation());
+        verify(matchRepository, never()).findAllByIdForUpdate(org.mockito.ArgumentMatchers.anyList());
+        verify(matchRepository, never()).saveAll(org.mockito.ArgumentMatchers.anyCollection());
+    }
+
+    @Test
+    void updateMatchLocationsRejectsCompletedMatchBeforeChangingAnyRoom() {
+        Match firstMatch = new Match();
+        firstMatch.setId(301L);
+        firstMatch.setCompleted(false);
+        firstMatch.setLocation("Original room");
+        Match completedMatch = new Match();
+        completedMatch.setId(302L);
+        completedMatch.setCompleted(true);
+        completedMatch.setLocation("Completed room");
+        List<MatchLocationDto> locations = List.of(
+                new MatchLocationDto(301L, "204"),
+                new MatchLocationDto(302L, "205")
+        );
+        when(matchRepository.countMatchesInRound(53L, 101L, 201L, List.of(301L, 302L))).thenReturn(2L);
+        when(matchRepository.findAllByIdForUpdate(List.of(301L, 302L))).thenReturn(List.of(firstMatch, completedMatch));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> matchService.updateMatchLocations(53L, 101L, 201L, locations)
+        );
+
+        assertEquals("Cannot edit a completed match", exception.getMessage());
+        assertEquals("Original room", firstMatch.getLocation());
+        assertEquals("Completed room", completedMatch.getLocation());
+        verify(matchRepository, never()).saveAll(org.mockito.ArgumentMatchers.anyCollection());
     }
 
     private static Judge judge(Long id) {

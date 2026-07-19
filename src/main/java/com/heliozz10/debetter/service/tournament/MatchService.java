@@ -12,6 +12,7 @@ import com.heliozz10.debetter.content.tournament.round.Round;
 import com.heliozz10.debetter.content.tournament.round.RoundGroupType;
 import com.heliozz10.debetter.content.tournament.team.Team;
 import com.heliozz10.debetter.content.user.User;
+import com.heliozz10.debetter.dto.tournament.match.in.MatchLocationDto;
 import com.heliozz10.debetter.dto.tournament.match.in.MatchResultDto;
 import com.heliozz10.debetter.dto.tournament.match.in.MatchUpdateDto;
 import com.heliozz10.debetter.dto.tournament.match.in.ParticipantScoreDto;
@@ -203,6 +204,53 @@ public class MatchService {
         if(debaterIds.stream().distinct().count() != debaterIds.size()) {
             throw new IllegalArgumentException("A debater cannot occupy multiple slots in the same match");
         }
+    }
+
+    @Transactional
+    public void updateMatchLocations(
+            Long tournamentId,
+            Long roundGroupId,
+            Long roundId,
+            Collection<MatchLocationDto> locations
+    ) {
+        if(locations == null || locations.isEmpty()) {
+            return;
+        }
+
+        List<Long> allMatchIds = locations.stream()
+                .map(MatchLocationDto::matchId)
+                .filter(Objects::nonNull)
+                .toList();
+
+        List<Long> matchIds = allMatchIds.stream().distinct().toList();
+
+        if(matchIds.isEmpty()) {
+            return;
+        }
+
+        if(matchIds.size() != allMatchIds.size()) {
+            throw new IllegalArgumentException("Duplicate match IDs in the submission.");
+        }
+
+        if(matchRepository.countMatchesInRound(tournamentId, roundGroupId, roundId, matchIds) != matchIds.size()) {
+            throw new IllegalArgumentException("Some matches do not belong to the specified round.");
+        }
+
+        Map<Long, Match> matchesById = matchRepository.findAllByIdForUpdate(matchIds).stream()
+                .collect(Collectors.toMap(Match::getId, m -> m));
+
+        if(matchesById.size() != matchIds.size()) {
+            throw new IllegalArgumentException("Some matches do not belong to the specified round.");
+        }
+
+        if(matchesById.values().stream().anyMatch(match -> Boolean.TRUE.equals(match.getCompleted()))) {
+            throw new IllegalStateException("Cannot edit a completed match");
+        }
+
+        locations.forEach(location -> matchesById.get(location.matchId())
+                .setLocation(normalizeLocation(location.location())));
+
+        matchRepository.saveAll(matchesById.values());
     }
 
     @Transactional
