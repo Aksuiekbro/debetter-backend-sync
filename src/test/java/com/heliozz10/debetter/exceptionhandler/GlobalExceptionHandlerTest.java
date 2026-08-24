@@ -128,4 +128,20 @@ class GlobalExceptionHandlerTest {
                 response.getBody().get("message")
         );
     }
+
+    @Test
+    void oversizedMultipartUploadsWithAnUnknownContainerLimitDoNotReportZeroMegabytes() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+        ResponseEntity<Map<String, String>> response = handler.handleMaxUploadSize(
+                new MaxUploadSizeExceededException(-1)
+        );
+
+        assertEquals(HttpStatus.PAYLOAD_TOO_LARGE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(
+                "Uploaded request exceeds the configured maximum size.",
+                response.getBody().get("message")
+        );
+    }
 }

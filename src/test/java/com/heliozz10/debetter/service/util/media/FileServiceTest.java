@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,7 +70,9 @@ class FileServiceTest {
                 .resolve("53-old.jpg");
         Files.writeString(storedFile, "old photo");
         Url url = imageUrl("/uploads/images/announcements/53-old.jpg");
-        when(urlRepository.countByUrl(url.getUrl())).thenReturn(1L);
+        AtomicBoolean transactionCommitted = new AtomicBoolean(false);
+        when(urlRepository.countByUrl(url.getUrl()))
+                .thenAnswer(invocation -> transactionCommitted.get() ? 0L : 1L);
         configureStorage();
 
         TransactionSynchronizationManager.initSynchronization();
@@ -77,6 +80,8 @@ class FileServiceTest {
             fileService.deletePhysicalFileAfterCommit(url);
 
             assertTrue(Files.exists(storedFile));
+            verifyNoInteractions(urlRepository);
+            transactionCommitted.set(true);
             TransactionSynchronizationManager.getSynchronizations()
                     .forEach(TransactionSynchronization::afterCommit);
             assertFalse(Files.exists(storedFile));
@@ -92,7 +97,7 @@ class FileServiceTest {
                 .resolve("53.jpg");
         Files.writeString(storedFile, "legacy shared photo");
         Url url = imageUrl("/uploads/announcements/53.jpg");
-        when(urlRepository.countByUrl(url.getUrl())).thenReturn(2L);
+        when(urlRepository.countByUrl(url.getUrl())).thenReturn(1L);
 
         TransactionSynchronizationManager.initSynchronization();
         try {

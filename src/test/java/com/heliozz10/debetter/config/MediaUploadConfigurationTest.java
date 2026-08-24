@@ -31,6 +31,7 @@ class MediaUploadConfigurationTest {
         PropertySourcesPropertyResolver properties = new PropertySourcesPropertyResolver(sources);
 
         assertEquals("5MB", properties.getProperty("spring.servlet.multipart.max-file-size"));
+        assertEquals("60MB", properties.getProperty("spring.servlet.multipart.max-request-size"));
         assertEquals(
                 5L * 1024 * 1024,
                 properties.getProperty("app.file-upload.max-file-size", Long.class)
