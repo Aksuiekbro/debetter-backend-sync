@@ -461,20 +461,22 @@ public class TournamentService {
             throw new IllegalArgumentException("Tournament is already started");
         }
 
-        if(checkResult.getUncheckedIn() > 0) {
-            error = true;
-            errorMessage.append("Not all teams are not checked in\n");;
-        }
-
         if(checkResult.getJudgeCount() == 0) {
             error = true;
             errorMessage.append("Tournament has no checked-in judges\n");
         }
 
         Round firstRound = tournamentRepository.findRound(tournamentId, RoundGroupType.PRELIMINARY, 1);
+        Tournament tournament = firstRound.getRoundGroup().getTournament();
+        List<Team> eligibleTeams = teamRepository.findByTournamentAndDisqualifiedFalse(tournament);
+
+        if(eligibleTeams.stream().anyMatch(team -> !Boolean.TRUE.equals(team.getCheckedIn()))) {
+            error = true;
+            errorMessage.append("Not all teams are checked in\n");
+        }
 
         DebateFormat format = firstRound.getCustomFormat() == null ? firstRound.getRoundGroup().getFormat() : firstRound.getCustomFormat();
-        int teamCount = checkResult.getTeamCount();
+        int teamCount = eligibleTeams.size();
 
         if(format == DebateFormat.BPF && teamCount % 4 != 0) {
             error = true;
@@ -488,16 +490,16 @@ public class TournamentService {
             throw new IllegalArgumentException(errorMessage.toString());
         }
 
-        firstRound.getRoundGroup().getTournament().setStarted(true);
+        tournament.setStarted(true);
 
-        setTeamsOfFirstRound(firstRound);
+        setTeamsOfFirstRound(firstRound, eligibleTeams);
         roundService.generateMatchesAndAssignJudges(firstRound);
     }
 
-    private void setTeamsOfFirstRound(Round round) {
+    private void setTeamsOfFirstRound(Round round, List<Team> eligibleTeams) {
         List<Team> teams = round.getTeams();
         teams.clear();
-        teams.addAll(round.getRoundGroup().getTournament().getTeams());
+        teams.addAll(eligibleTeams);
     }
 
     //TOURNAMENT DISABLING & DELETING

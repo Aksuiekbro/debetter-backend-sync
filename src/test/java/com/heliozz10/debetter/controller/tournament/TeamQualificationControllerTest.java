@@ -39,8 +39,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 // Do not make this test transactional: an outer test transaction would mask the endpoint's missing-transaction regression.
-@SpringBootTest(properties =
-        "spring.datasource.url=jdbc:h2:mem:team_qualification_test;DB_CLOSE_DELAY=0;DB_CLOSE_ON_EXIT=FALSE")
+@SpringBootTest(properties = {
+        "spring.datasource.url=jdbc:h2:mem:team_qualification_test;DB_CLOSE_DELAY=0;DB_CLOSE_ON_EXIT=FALSE",
+        "spring.jpa.properties.hibernate.search.backend.directory.root=target/test-lucene-indexes/team-qualification"
+})
 @AutoConfigureMockMvc
 @Import(TeamQualificationControllerTest.CacheTestConfiguration.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -121,7 +123,7 @@ class TeamQualificationControllerTest {
     }
 
     @Test
-    void qualificationUpdateRejectsTeamFromAnotherTournament() throws Exception {
+    void disqualifyRejectsTeamFromAnotherTournament() throws Exception {
         Tournament authorizedTournament = tournamentRepository.saveAndFlush(tournament());
         Tournament otherTournament = tournamentRepository.saveAndFlush(tournament());
         Team otherTeam = teamRepository.saveAndFlush(team(otherTournament, false));
@@ -135,6 +137,23 @@ class TeamQualificationControllerTest {
                 .andExpect(jsonPath("$.message").value("Team not found"));
 
         assertFalse(teamRepository.findById(otherTeam.getId()).orElseThrow().getDisqualified());
+    }
+
+    @Test
+    void requalifyRejectsTeamFromAnotherTournament() throws Exception {
+        Tournament authorizedTournament = tournamentRepository.saveAndFlush(tournament());
+        Tournament otherTournament = tournamentRepository.saveAndFlush(tournament());
+        Team otherTeam = teamRepository.saveAndFlush(team(otherTournament, true));
+        UsernamePasswordAuthenticationToken organizer = organizerWithRole(authorizedTournament, TournamentRole.EDIT);
+
+        mockMvc.perform(patch("/api/tournaments/{id}/teams/{teamId}/requalify",
+                        authorizedTournament.getId(), otherTeam.getId())
+                        .servletPath("/api")
+                        .with(authentication(organizer)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Team not found"));
+
+        assertTrue(teamRepository.findById(otherTeam.getId()).orElseThrow().getDisqualified());
     }
 
     private UsernamePasswordAuthenticationToken organizerWithRole(

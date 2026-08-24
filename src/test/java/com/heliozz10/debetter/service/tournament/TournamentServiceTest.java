@@ -208,6 +208,61 @@ class TournamentServiceTest {
     @Test
     void startTournamentGeneratesInitialPairingsAfterAssigningFirstRoundTeams() {
         Tournament tournament = buildTournamentWithExistingTeamCount(32);
+        Round firstRound = firstRound(tournament);
+
+        when(tournamentRepository.checkTournament(53L)).thenReturn(tournamentCheckResult(0, 16, 32));
+        when(tournamentRepository.findRound(53L, RoundGroupType.PRELIMINARY, 1)).thenReturn(firstRound);
+        when(teamRepository.findByTournamentAndDisqualifiedFalse(tournament)).thenReturn(tournament.getTeams());
+
+        tournamentService.startTournament(53L);
+
+        assertEquals(32, firstRound.getTeams().size());
+        assertEquals(true, tournament.getStarted());
+        verify(roundService).generateMatchesAndAssignJudges(firstRound);
+    }
+
+    @Test
+    void startTournamentExcludesDisqualifiedTeamsFromInitialPairings() {
+        Tournament tournament = buildTournamentWithExistingTeamCount(3);
+        Team disqualifiedTeam = tournament.getTeams().get(2);
+        disqualifiedTeam.setDisqualified(true);
+        disqualifiedTeam.setCheckedIn(false);
+        List<Team> eligibleTeams = tournament.getTeams().subList(0, 2);
+
+        Round firstRound = firstRound(tournament);
+
+        when(tournamentRepository.checkTournament(53L)).thenReturn(tournamentCheckResult(1, 1, 3));
+        when(tournamentRepository.findRound(53L, RoundGroupType.PRELIMINARY, 1)).thenReturn(firstRound);
+        when(teamRepository.findByTournamentAndDisqualifiedFalse(tournament)).thenReturn(eligibleTeams);
+
+        tournamentService.startTournament(53L);
+
+        assertEquals(eligibleTeams, firstRound.getTeams());
+        assertEquals(true, tournament.getStarted());
+        verify(roundService).generateMatchesAndAssignJudges(firstRound);
+    }
+
+    @Test
+    void startTournamentRejectsUncheckedEligibleTeam() {
+        Tournament tournament = buildTournamentWithExistingTeamCount(2);
+        tournament.getTeams().getFirst().setCheckedIn(false);
+        Round firstRound = firstRound(tournament);
+
+        when(tournamentRepository.checkTournament(53L)).thenReturn(tournamentCheckResult(1, 1, 2));
+        when(tournamentRepository.findRound(53L, RoundGroupType.PRELIMINARY, 1)).thenReturn(firstRound);
+        when(teamRepository.findByTournamentAndDisqualifiedFalse(tournament)).thenReturn(tournament.getTeams());
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> tournamentService.startTournament(53L)
+        );
+
+        assertEquals("Not all teams are checked in\n", exception.getMessage());
+        assertEquals(false, tournament.getStarted());
+        verify(roundService, never()).generateMatchesAndAssignJudges(any());
+    }
+
+    private static Round firstRound(Tournament tournament) {
         RoundGroup preliminaryGroup = new RoundGroup();
         preliminaryGroup.setTournament(tournament);
         preliminaryGroup.setType(RoundGroupType.PRELIMINARY);
@@ -218,8 +273,11 @@ class TournamentServiceTest {
         firstRound.setRoundGroup(preliminaryGroup);
         firstRound.setRoundNumber(1);
         firstRound.setTeams(new ArrayList<>());
+        return firstRound;
+    }
 
-        when(tournamentRepository.checkTournament(53L)).thenReturn(new TournamentCheckResult() {
+    private static TournamentCheckResult tournamentCheckResult(int uncheckedIn, int judgeCount, int teamCount) {
+        return new TournamentCheckResult() {
             @Override
             public boolean getStarted() {
                 return false;
@@ -227,26 +285,19 @@ class TournamentServiceTest {
 
             @Override
             public int getUncheckedIn() {
-                return 0;
+                return uncheckedIn;
             }
 
             @Override
             public int getJudgeCount() {
-                return 16;
+                return judgeCount;
             }
 
             @Override
             public int getTeamCount() {
-                return 32;
+                return teamCount;
             }
-        });
-        when(tournamentRepository.findRound(53L, RoundGroupType.PRELIMINARY, 1)).thenReturn(firstRound);
-
-        tournamentService.startTournament(53L);
-
-        assertEquals(32, firstRound.getTeams().size());
-        assertEquals(true, tournament.getStarted());
-        verify(roundService).generateMatchesAndAssignJudges(firstRound);
+        };
     }
 
     private Tournament buildTournamentWithExistingTeamCount(int teamCount) {
@@ -255,7 +306,13 @@ class TournamentServiceTest {
         tournament.setRegistrationDeadline(LocalDateTime.now().plusDays(1));
         tournament.setPreliminaryFormat(DebateFormat.APF);
         tournament.setTeamLimit(32);
-        tournament.setTeams(IntStream.range(0, teamCount).mapToObj(i -> new Team()).toList());
+        tournament.setStarted(false);
+        tournament.setTeams(IntStream.range(0, teamCount).mapToObj(i -> {
+            Team team = new Team();
+            team.setCheckedIn(true);
+            team.setDisqualified(false);
+            return team;
+        }).toList());
         return tournament;
     }
 }
