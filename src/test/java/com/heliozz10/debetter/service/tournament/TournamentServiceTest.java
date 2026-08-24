@@ -262,6 +262,27 @@ class TournamentServiceTest {
         verify(roundService, never()).generateMatchesAndAssignJudges(any());
     }
 
+    @Test
+    void startTournamentRejectsEmptyEligibleTeamSet() {
+        Tournament tournament = buildTournamentWithExistingTeamCount(2);
+        tournament.getTeams().forEach(team -> team.setDisqualified(true));
+        Round firstRound = firstRound(tournament);
+
+        when(tournamentRepository.checkTournament(53L)).thenReturn(tournamentCheckResult(0, 1, 2));
+        when(tournamentRepository.findRound(53L, RoundGroupType.PRELIMINARY, 1)).thenReturn(firstRound);
+        when(teamRepository.findByTournamentAndDisqualifiedFalse(tournament)).thenReturn(List.of());
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> tournamentService.startTournament(53L)
+        );
+
+        assertEquals("Tournament has no eligible teams\n", exception.getMessage());
+        assertEquals(false, tournament.getStarted());
+        assertEquals(List.of(), firstRound.getTeams());
+        verify(roundService, never()).generateMatchesAndAssignJudges(any());
+    }
+
     private static Round firstRound(Tournament tournament) {
         RoundGroup preliminaryGroup = new RoundGroup();
         preliminaryGroup.setTournament(tournament);

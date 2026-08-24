@@ -478,7 +478,10 @@ public class TournamentService {
         DebateFormat format = firstRound.getCustomFormat() == null ? firstRound.getRoundGroup().getFormat() : firstRound.getCustomFormat();
         int teamCount = eligibleTeams.size();
 
-        if(format == DebateFormat.BPF && teamCount % 4 != 0) {
+        if(teamCount == 0) {
+            error = true;
+            errorMessage.append("Tournament has no eligible teams\n");
+        } else if(format == DebateFormat.BPF && teamCount % 4 != 0) {
             error = true;
             errorMessage.append("BPF rounds must have a number of teams divisible by 4\n");
         } else if(teamCount % 2 != 0) {
