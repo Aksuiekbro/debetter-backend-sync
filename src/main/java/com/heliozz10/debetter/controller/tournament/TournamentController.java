@@ -11,7 +11,6 @@ import com.heliozz10.debetter.dto.user.out.SimpleUserView;
 import com.heliozz10.debetter.dto.user.out.UserView;
 import com.heliozz10.debetter.mapper.tournament.TournamentMapper;
 import com.heliozz10.debetter.mapper.user.UserMapper;
-import com.heliozz10.debetter.repository.tournament.team.TeamRepository;
 import com.heliozz10.debetter.service.tournament.TournamentService;
 import com.heliozz10.debetter.validation.OnCreate;
 import jakarta.validation.Valid;
@@ -37,8 +36,6 @@ public class TournamentController {
     private final TournamentMapper tournamentMapper;
 
     private final UserMapper userMapper;
-
-    private final TeamRepository teamRepository;
 
     @GetMapping
     public PageableResult<TournamentView> getTournaments(
@@ -121,13 +118,13 @@ public class TournamentController {
     @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #id)")
     @PatchMapping("{id}/teams/{teamId}/disqualify")
     public void disqualifyTeam(@PathVariable Long id, @PathVariable Long teamId) {
-        teamRepository.setTeamDisqualifiedByTournamentIdAndId(id, teamId);
+        tournamentService.disqualifyTeam(id, teamId);
     }
 
     @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #id)")
     @PatchMapping("{id}/teams/{teamId}/requalify")
     public void requalifyTeam(@PathVariable Long id, @PathVariable Long teamId) {
-        teamRepository.setTeamNotDisqualifiedByTournamentIdAndId(id, teamId);
+        tournamentService.requalifyTeam(id, teamId);
     }
 
     @PreAuthorize("principal.role.name() == 'ORGANIZER' and @tournamentSecurity.hasEditPermission(principal, #id)")

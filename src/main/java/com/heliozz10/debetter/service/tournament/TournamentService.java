@@ -421,6 +421,22 @@ public class TournamentService {
         teamRepository.uncheckInTeamById(teamId);
     }
 
+    @Transactional
+    public void disqualifyTeam(Long tournamentId, Long teamId) {
+        int updatedTeams = teamRepository.setTeamDisqualifiedByTournamentIdAndId(tournamentId, teamId);
+        if(updatedTeams == 0) {
+            throw new EntityNotFoundException("Team not found");
+        }
+    }
+
+    @Transactional
+    public void requalifyTeam(Long tournamentId, Long teamId) {
+        int updatedTeams = teamRepository.setTeamNotDisqualifiedByTournamentIdAndId(tournamentId, teamId);
+        if(updatedTeams == 0) {
+            throw new EntityNotFoundException("Team not found");
+        }
+    }
+
     /**
      * Starts a tournament. This method first checks if the tournament is valid to be started.
      * The checks are as follows:
@@ -445,22 +461,27 @@ public class TournamentService {
             throw new IllegalArgumentException("Tournament is already started");
         }
 
-        if(checkResult.getUncheckedIn() > 0) {
-            error = true;
-            errorMessage.append("Not all teams are not checked in\n");;
-        }
-
         if(checkResult.getJudgeCount() == 0) {
             error = true;
             errorMessage.append("Tournament has no checked-in judges\n");
         }
 
         Round firstRound = tournamentRepository.findRound(tournamentId, RoundGroupType.PRELIMINARY, 1);
+        Tournament tournament = firstRound.getRoundGroup().getTournament();
+        List<Team> eligibleTeams = teamRepository.findByTournamentAndDisqualifiedFalse(tournament);
+
+        if(eligibleTeams.stream().anyMatch(team -> !Boolean.TRUE.equals(team.getCheckedIn()))) {
+            error = true;
+            errorMessage.append("Not all teams are checked in\n");
+        }
 
         DebateFormat format = firstRound.getCustomFormat() == null ? firstRound.getRoundGroup().getFormat() : firstRound.getCustomFormat();
-        int teamCount = checkResult.getTeamCount();
+        int teamCount = eligibleTeams.size();
 
-        if(format == DebateFormat.BPF && teamCount % 4 != 0) {
+        if(teamCount == 0) {
+            error = true;
+            errorMessage.append("Tournament has no eligible teams\n");
+        } else if(format == DebateFormat.BPF && teamCount % 4 != 0) {
             error = true;
             errorMessage.append("BPF rounds must have a number of teams divisible by 4\n");
         } else if(teamCount % 2 != 0) {
@@ -472,16 +493,16 @@ public class TournamentService {
             throw new IllegalArgumentException(errorMessage.toString());
         }
 
-        firstRound.getRoundGroup().getTournament().setStarted(true);
+        tournament.setStarted(true);
 
-        setTeamsOfFirstRound(firstRound);
+        setTeamsOfFirstRound(firstRound, eligibleTeams);
         roundService.generateMatchesAndAssignJudges(firstRound);
     }
 
-    private void setTeamsOfFirstRound(Round round) {
+    private void setTeamsOfFirstRound(Round round, List<Team> eligibleTeams) {
         List<Team> teams = round.getTeams();
         teams.clear();
-        teams.addAll(round.getRoundGroup().getTournament().getTeams());
+        teams.addAll(eligibleTeams);
     }
 
     //TOURNAMENT DISABLING & DELETING
