@@ -116,6 +116,68 @@ class MatchServiceTest {
     }
 
     @Test
+    void submitMatchResultsRejectsNullBatchEntriesBeforeReadingIds() {
+        List<MatchResultDto> results = java.util.Arrays.asList((MatchResultDto) null);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> matchService.submitMatchResults(53L, 101L, 201L, results)
+        );
+
+        assertEquals("Match results cannot contain null entries.", exception.getMessage());
+        verify(matchRepository, never()).countMatchesInRound(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyList()
+        );
+    }
+
+    @Test
+    void submitMatchResultsRejectsNullTeamResultEntries() {
+        Match match = teamMatch(301L);
+        List<TeamResultDto> teamResults = java.util.Arrays.asList(
+                new TeamResultDto(501L, true, List.of(new ParticipantScoreDto(601L, 75))),
+                null
+        );
+        List<MatchResultDto> results = List.of(new MatchResultDto(301L, teamResults, null));
+        when(matchRepository.countMatchesInRound(53L, 101L, 201L, List.of(301L))).thenReturn(1L);
+        when(matchRepository.findAllByIdForUpdate(List.of(301L))).thenReturn(List.of(match));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> matchService.submitMatchResults(53L, 101L, 201L, results)
+        );
+
+        assertEquals("Team results cannot contain null entries.", exception.getMessage());
+        verify(matchRepository, never()).updateMatchScoresBulk(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void submitMatchResultsRejectsNullParticipantScoreEntries() {
+        Match match = teamMatch(301L);
+        List<ParticipantScoreDto> nullScore = java.util.Arrays.asList((ParticipantScoreDto) null);
+        List<MatchResultDto> results = List.of(new MatchResultDto(
+                301L,
+                List.of(
+                        new TeamResultDto(501L, true, nullScore),
+                        new TeamResultDto(502L, false, List.of(new ParticipantScoreDto(602L, 70)))
+                ),
+                null
+        ));
+        when(matchRepository.countMatchesInRound(53L, 101L, 201L, List.of(301L))).thenReturn(1L);
+        when(matchRepository.findAllByIdForUpdate(List.of(301L))).thenReturn(List.of(match));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> matchService.submitMatchResults(53L, 101L, 201L, results)
+        );
+
+        assertEquals("Participant scores cannot contain null entries.", exception.getMessage());
+        verify(matchRepository, never()).updateMatchScoresBulk(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
     void submitMatchResultsRejectsMatchesOutsideRound() {
         List<MatchResultDto> results = List.of(
                 new MatchResultDto(301L, List.of(), null),

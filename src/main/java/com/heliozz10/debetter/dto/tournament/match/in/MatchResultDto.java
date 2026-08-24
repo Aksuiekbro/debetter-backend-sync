@@ -8,8 +8,8 @@ import java.util.List;
 
 public record MatchResultDto(
         @NotNull @Positive Long matchId,
-        @Valid List<TeamResultDto> teamResults,
-        @Valid List<ParticipantScoreDto> participantScores,
+        List<@NotNull @Valid TeamResultDto> teamResults,
+        List<@NotNull @Valid ParticipantScoreDto> participantScores,
         @Positive Long winnerParticipantId
 ) {
     public MatchResultDto(
