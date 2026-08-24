@@ -33,6 +33,9 @@ spring:
   mvc:
     servlet:
       path: /api
+  servlet:
+    multipart:
+      max-file-size: ${SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE:5MB}
   liquibase:
     enabled: ${SPRING_LIQUIBASE_ENABLED:false}
     change-log: classpath:db/changelog/db.changelog-master.yml

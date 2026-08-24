@@ -1,7 +1,9 @@
 package com.heliozz10.debetter.service.tournament;
 
 import com.heliozz10.debetter.content.tournament.DebateFormat;
+import com.heliozz10.debetter.content.tournament.Schedule;
 import com.heliozz10.debetter.content.tournament.Tournament;
+import com.heliozz10.debetter.content.tournament.announcement.Announcement;
 import com.heliozz10.debetter.content.tournament.round.Round;
 import com.heliozz10.debetter.content.tournament.round.RoundGroup;
 import com.heliozz10.debetter.content.tournament.round.RoundGroupType;
@@ -9,6 +11,7 @@ import com.heliozz10.debetter.content.tournament.team.Club;
 import com.heliozz10.debetter.content.tournament.team.Team;
 import com.heliozz10.debetter.content.user.User;
 import com.heliozz10.debetter.content.user.profile.ParticipantProfile;
+import com.heliozz10.debetter.content.util.media.Url;
 import com.heliozz10.debetter.dto.tournament.team.in.TeamFormDto;
 import com.heliozz10.debetter.mapper.tournament.JudgeMapper;
 import com.heliozz10.debetter.mapper.tournament.TeamMapper;
@@ -37,6 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
@@ -50,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -283,6 +288,35 @@ class TournamentServiceTest {
         verify(roundService, never()).generateMatchesAndAssignJudges(any());
     }
 
+    @Test
+    void deleteTournamentSchedulesAllOwnedImagesForPostCommitCleanup() {
+        Url thumbnail = imageUrl("/uploads/images/tournaments/53.png");
+        Url announcementImage = imageUrl("/uploads/images/announcements/53-announcement.png");
+        Url scheduleImage = imageUrl("/uploads/images/schedules/53-schedule.png");
+
+        Announcement announcement = new Announcement();
+        announcement.setImageUrl(announcementImage);
+        Schedule schedule = new Schedule();
+        schedule.setImageUrl(scheduleImage);
+
+        Tournament tournament = new Tournament();
+        tournament.setId(53L);
+        tournament.setImageUrl(thumbnail);
+        tournament.setAnnouncements(List.of(announcement));
+        tournament.setSchedules(List.of(schedule));
+
+        when(tournamentRepository.findById(53L)).thenReturn(Optional.of(tournament));
+
+        tournamentService.deleteTournament(53L);
+
+        InOrder deletionOrder = inOrder(fileService, tournamentRepository);
+        deletionOrder.verify(fileService).deletePhysicalFileAfterCommit(thumbnail);
+        deletionOrder.verify(fileService).deletePhysicalFileAfterCommit(announcementImage);
+        deletionOrder.verify(fileService).deletePhysicalFileAfterCommit(scheduleImage);
+        deletionOrder.verify(tournamentRepository).delete(tournament);
+        verify(fileService, never()).deleteFile(any());
+    }
+
     private static Round firstRound(Tournament tournament) {
         RoundGroup preliminaryGroup = new RoundGroup();
         preliminaryGroup.setTournament(tournament);
@@ -335,5 +369,11 @@ class TournamentServiceTest {
             return team;
         }).toList());
         return tournament;
+    }
+
+    private static Url imageUrl(String value) {
+        Url url = new Url();
+        url.setUrl(value);
+        return url;
     }
 }

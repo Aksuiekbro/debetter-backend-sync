@@ -59,7 +59,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-//TODO: When deleting a tournament dont forget to remove the thumbnail images from the file system
 //TODO: add cascade = CascadeType.ALL and add orphanRemoval = true to where needed
 @RequiredArgsConstructor
 @Service
@@ -521,7 +520,19 @@ public class TournamentService {
     public void deleteTournament(Long id) {
         Tournament tournament = tournamentRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Tournament not found"));
-        fileService.deleteFile(tournament.getImageUrl());
+
+        fileService.deletePhysicalFileAfterCommit(tournament.getImageUrl());
+        if (tournament.getAnnouncements() != null) {
+            tournament.getAnnouncements().forEach(
+                    announcement -> fileService.deletePhysicalFileAfterCommit(announcement.getImageUrl())
+            );
+        }
+        if (tournament.getSchedules() != null) {
+            tournament.getSchedules().forEach(
+                    schedule -> fileService.deletePhysicalFileAfterCommit(schedule.getImageUrl())
+            );
+        }
+
         tournamentRepository.delete(tournament);
     }
 }
