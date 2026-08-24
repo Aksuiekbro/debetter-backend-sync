@@ -51,6 +51,7 @@ public class TournamentController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #id)")
     public TournamentView getTournamentById(@PathVariable Long id) {
         return tournamentMapper.toTournamentView(tournamentService.getTournamentById(id));
     }
@@ -76,11 +77,13 @@ public class TournamentController {
     }
 
     @GetMapping("/{id}/main-organizer")
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #id)")
     public UserView getMainOrganizer(@PathVariable Long id) {
         return userMapper.toUserView(tournamentService.getMainOrganizer(id).get());
     }
 
     @GetMapping("/{id}/organizers")
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #id)")
     public List<SimpleUserView> getOrganizers(@PathVariable Long id) {
         return userMapper.toSimpleUserViews(tournamentService.getOrganizers(id));
     }

@@ -23,6 +23,7 @@ public class TournamentParticipantController {
     private final TournamentParticipantMapper tournamentParticipantMapper;
 
     @GetMapping
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public PageableResult<SimpleTournamentParticipantView> getTournamentParticipants(
             @PathVariable Long tournamentId,
             @Valid @ModelAttribute TournamentParticipantGetParams params,
@@ -37,6 +38,7 @@ public class TournamentParticipantController {
     }
 
     @GetMapping("/{participantId}")
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public TournamentParticipantView getTournamentParticipant(@PathVariable Long tournamentId, @PathVariable Long participantId) {
         return tournamentParticipantService.toTournamentParticipantView(tournamentParticipantService.getParticipantByTournamentIdAndId(tournamentId, participantId));
     }

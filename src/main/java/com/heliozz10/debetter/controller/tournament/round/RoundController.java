@@ -25,11 +25,13 @@ public class RoundController {
     private final TournamentSecurity tournamentSecurity;
 
     @GetMapping
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public List<SimpleRoundView> getRoundsByRoundGroupId(@PathVariable Long tournamentId, @PathVariable Long roundGroupId) {
         return roundMapper.toSimpleRoundViews(roundService.getRoundsByTournamentIdAndRoundGroupId(tournamentId, roundGroupId));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public RoundView getRoundById(
             @PathVariable Long tournamentId,
             @PathVariable Long roundGroupId,
