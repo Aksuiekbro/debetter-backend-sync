@@ -421,6 +421,22 @@ public class TournamentService {
         teamRepository.uncheckInTeamById(teamId);
     }
 
+    @Transactional
+    public void disqualifyTeam(Long tournamentId, Long teamId) {
+        int updatedTeams = teamRepository.setTeamDisqualifiedByTournamentIdAndId(tournamentId, teamId);
+        if(updatedTeams == 0) {
+            throw new EntityNotFoundException("Team not found");
+        }
+    }
+
+    @Transactional
+    public void requalifyTeam(Long tournamentId, Long teamId) {
+        int updatedTeams = teamRepository.setTeamNotDisqualifiedByTournamentIdAndId(tournamentId, teamId);
+        if(updatedTeams == 0) {
+            throw new EntityNotFoundException("Team not found");
+        }
+    }
+
     /**
      * Starts a tournament. This method first checks if the tournament is valid to be started.
      * The checks are as follows:

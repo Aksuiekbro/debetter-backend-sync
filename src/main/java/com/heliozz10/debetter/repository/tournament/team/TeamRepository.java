@@ -50,11 +50,11 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
 
     @Modifying
     @Query("UPDATE Team t SET t.disqualified = true WHERE t.id = :teamId AND t.tournament.id = :tournamentId")
-    void setTeamDisqualifiedByTournamentIdAndId(Long tournamentId, Long teamId);
+    int setTeamDisqualifiedByTournamentIdAndId(Long tournamentId, Long teamId);
 
     @Modifying
     @Query("UPDATE Team t SET t.disqualified = false WHERE t.id = :teamId AND t.tournament.id = :tournamentId")
-    void setTeamNotDisqualifiedByTournamentIdAndId(Long tournamentId, Long teamId);
+    int setTeamNotDisqualifiedByTournamentIdAndId(Long tournamentId, Long teamId);
 
     @Transactional
     @Modifying
