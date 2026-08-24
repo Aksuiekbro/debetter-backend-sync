@@ -71,7 +71,7 @@ public class MatchController {
             @PathVariable Long tournamentId,
             @PathVariable Long roundGroupId,
             @PathVariable Long roundId,
-            @Valid @RequestBody List<MatchResultDto> matchResultDto
+            @Valid @RequestBody List<@NotNull @Valid MatchResultDto> matchResultDto
     ) {
         matchService.submitMatchResults(tournamentId, roundGroupId, roundId, matchResultDto);
     }

@@ -259,6 +259,10 @@ public class MatchService {
             return;
         }
 
+        if(results.stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("Match results cannot contain null entries.");
+        }
+
         List<Long> allMatchIds = results.stream()
                 .map(MatchResultDto::matchId)
                 .filter(Objects::nonNull)
@@ -550,6 +554,10 @@ public class MatchService {
             throw new IllegalArgumentException("A result is required for every team in the match.");
         }
 
+        if(teamResults.stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("Team results cannot contain null entries.");
+        }
+
         Set<Long> expectedTeamIds = teams.stream().map(Team::getId).collect(Collectors.toSet());
         Set<Long> suppliedTeamIds = teamResults.stream().map(TeamResultDto::teamId).collect(Collectors.toSet());
         if(suppliedTeamIds.size() != teamResults.size() || !suppliedTeamIds.equals(expectedTeamIds)) {
@@ -584,6 +592,10 @@ public class MatchService {
     private void validateParticipantScores(List<ParticipantScoreDto> scores, List<TournamentParticipant> participants) {
         if(scores == null || participants == null || participants.isEmpty() || scores.size() != participants.size()) {
             throw new IllegalArgumentException("A score is required for every participating debater.");
+        }
+
+        if(scores.stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("Participant scores cannot contain null entries.");
         }
 
         Set<Long> expectedParticipantIds = participants.stream()

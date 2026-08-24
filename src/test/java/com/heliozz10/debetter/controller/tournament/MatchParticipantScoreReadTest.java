@@ -244,6 +244,19 @@ class MatchParticipantScoreReadTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void authorizedNullResultEntryReturnsDescriptiveBadRequest() throws Exception {
+        TeamFixture fixture = bpfFixture();
+
+        mockMvc.perform(patch(fixture.endpoint() + "/results")
+                        .servletPath("/api")
+                        .with(authentication(grantFullAccess(fixture.tournament())))
+                        .contentType("application/json")
+                        .content("[null]"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid request: must not be null"));
+    }
+
     private TeamFixture bpfFixture() {
         Tournament tournament = tournament();
         tournament.setPreliminaryFormat(DebateFormat.BPF);

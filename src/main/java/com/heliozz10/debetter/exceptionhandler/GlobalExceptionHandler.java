@@ -2,6 +2,7 @@ package com.heliozz10.debetter.exceptionhandler;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -132,6 +134,21 @@ public class GlobalExceptionHandler {
                 .orElse("Validation failed");
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                "message", message
+        ));
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<Map<String, String>> handleMethodValidation(HandlerMethodValidationException ex) {
+        String detail = ex.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream())
+                .map(MessageSourceResolvable::getDefaultMessage)
+                .filter(message -> message != null && !message.isBlank())
+                .findFirst()
+                .orElse("Validation failed");
+
+        String message = (ex.isForReturnValue() ? "Response validation failed: " : "Invalid request: ") + detail;
+        return ResponseEntity.status(ex.getStatusCode()).body(Map.of(
                 "message", message
         ));
     }
