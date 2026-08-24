@@ -3,6 +3,7 @@ package com.heliozz10.debetter.service.tournament;
 import com.heliozz10.debetter.content.tournament.DebateFormat;
 import com.heliozz10.debetter.content.tournament.Schedule;
 import com.heliozz10.debetter.content.tournament.Tournament;
+import com.heliozz10.debetter.content.tournament.TournamentMap;
 import com.heliozz10.debetter.content.tournament.announcement.Announcement;
 import com.heliozz10.debetter.content.tournament.round.Round;
 import com.heliozz10.debetter.content.tournament.round.RoundGroup;
@@ -291,9 +292,12 @@ class TournamentServiceTest {
     @Test
     void deleteTournamentSchedulesAllOwnedImagesForPostCommitCleanup() {
         Url thumbnail = imageUrl("/uploads/images/tournaments/53.png");
+        Url mapImage = imageUrl("/uploads/images/tournament-maps/53-map.png");
         Url announcementImage = imageUrl("/uploads/images/announcements/53-announcement.png");
         Url scheduleImage = imageUrl("/uploads/images/schedules/53-schedule.png");
 
+        TournamentMap tournamentMap = new TournamentMap();
+        tournamentMap.setImageUrl(mapImage);
         Announcement announcement = new Announcement();
         announcement.setImageUrl(announcementImage);
         Schedule schedule = new Schedule();
@@ -302,6 +306,7 @@ class TournamentServiceTest {
         Tournament tournament = new Tournament();
         tournament.setId(53L);
         tournament.setImageUrl(thumbnail);
+        tournament.setTournamentMap(tournamentMap);
         tournament.setAnnouncements(List.of(announcement));
         tournament.setSchedules(List.of(schedule));
 
@@ -311,6 +316,7 @@ class TournamentServiceTest {
 
         InOrder deletionOrder = inOrder(fileService, tournamentRepository);
         deletionOrder.verify(fileService).deletePhysicalFileAfterCommit(thumbnail);
+        deletionOrder.verify(fileService).deletePhysicalFileAfterCommit(mapImage);
         deletionOrder.verify(fileService).deletePhysicalFileAfterCommit(announcementImage);
         deletionOrder.verify(fileService).deletePhysicalFileAfterCommit(scheduleImage);
         deletionOrder.verify(tournamentRepository).delete(tournament);

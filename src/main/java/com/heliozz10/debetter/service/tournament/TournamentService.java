@@ -522,6 +522,9 @@ public class TournamentService {
                 .orElseThrow(() -> new EntityNotFoundException("Tournament not found"));
 
         fileService.deletePhysicalFileAfterCommit(tournament.getImageUrl());
+        if (tournament.getTournamentMap() != null) {
+            fileService.deletePhysicalFileAfterCommit(tournament.getTournamentMap().getImageUrl());
+        }
         if (tournament.getAnnouncements() != null) {
             tournament.getAnnouncements().forEach(
                     announcement -> fileService.deletePhysicalFileAfterCommit(announcement.getImageUrl())
