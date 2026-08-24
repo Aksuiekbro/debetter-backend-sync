@@ -9,4 +9,6 @@ import java.util.Optional;
 @Repository
 public interface UrlRepository extends JpaRepository<Url, Long> {
     Optional<Url> findFirstByUrlOrderByIdAsc(String url);
+
+    long countByUrl(String url);
 }

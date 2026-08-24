@@ -1,9 +1,11 @@
 package com.heliozz10.debetter.exceptionhandler;
 
+import com.heliozz10.debetter.service.util.media.FileStorageException;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -96,5 +98,50 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals("Invalid request body.", response.getBody().get("message"));
+    }
+
+    @Test
+    void fileStorageFailuresReturnASafeUsefulMessage() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+        ResponseEntity<Map<String, String>> response = handler.handleFileStorage(
+                new FileStorageException("Failed to save uploaded file", new RuntimeException("disk detail"))
+        );
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Failed to save uploaded file. Please try again.", response.getBody().get("message"));
+    }
+
+    @Test
+    void oversizedMultipartUploadsReturnAUsefulPayloadTooLargeMessage() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+        ResponseEntity<Map<String, String>> response = handler.handleMaxUploadSize(
+                new MaxUploadSizeExceededException(5L * 1024 * 1024)
+        );
+
+        assertEquals(HttpStatus.PAYLOAD_TOO_LARGE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(
+                "Uploaded file exceeds the maximum allowed size of 5 MB.",
+                response.getBody().get("message")
+        );
+    }
+
+    @Test
+    void oversizedMultipartUploadsWithAnUnknownContainerLimitDoNotReportZeroMegabytes() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+        ResponseEntity<Map<String, String>> response = handler.handleMaxUploadSize(
+                new MaxUploadSizeExceededException(-1)
+        );
+
+        assertEquals(HttpStatus.PAYLOAD_TOO_LARGE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(
+                "Uploaded request exceeds the configured maximum size.",
+                response.getBody().get("message")
+        );
     }
 }
