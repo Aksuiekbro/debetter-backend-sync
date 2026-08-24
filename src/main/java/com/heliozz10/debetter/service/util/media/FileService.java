@@ -66,13 +66,10 @@ public class FileService {
             return;
         }
 
-        if (urlRepository.countByUrl(url.getUrl()) > 1) {
-            return;
-        }
-
-        Path storagePath = Paths.get(getStoragePathFromUrl(url));
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            deleteStoredFile(storagePath);
+            if (urlRepository.countByUrl(url.getUrl()) <= 1) {
+                deleteStoredFile(Paths.get(getStoragePathFromUrl(url)));
+            }
             return;
         }
 
@@ -80,9 +77,11 @@ public class FileService {
             @Override
             public void afterCommit() {
                 try {
-                    deleteStoredFile(storagePath);
+                    if (urlRepository.countByUrl(url.getUrl()) == 0) {
+                        deleteStoredFile(Paths.get(getStoragePathFromUrl(url)));
+                    }
                 } catch (RuntimeException exception) {
-                    log.error("Database changes committed, but stored file could not be deleted: {}", storagePath, exception);
+                    log.error("Database changes committed, but stored file cleanup failed: {}", url.getUrl(), exception);
                 }
             }
         });

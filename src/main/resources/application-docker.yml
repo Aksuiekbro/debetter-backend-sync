@@ -36,6 +36,7 @@ spring:
   servlet:
     multipart:
       max-file-size: ${SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE:5MB}
+      max-request-size: ${SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE:60MB}
   liquibase:
     enabled: ${SPRING_LIQUIBASE_ENABLED:false}
     change-log: classpath:db/changelog/db.changelog-master.yml
