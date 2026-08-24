@@ -115,6 +115,9 @@ public class Tournament {
     @OneToMany(mappedBy = "tournament", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Schedule> schedules;
 
+    @OneToOne(mappedBy = "tournament", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private TournamentMap tournamentMap;
+
     @IndexingDependency(reindexOnUpdate = ReindexOnUpdate.SHALLOW)
     @IndexedEmbedded(includePaths = {"name"})
     @ManyToMany(fetch = FetchType.EAGER)
