@@ -94,6 +94,10 @@ class MatchResultsPostgresIntegrationTest {
 
     @DynamicPropertySource
     static void postgresProperties(DynamicPropertyRegistry registry) {
+        // Spring resolves dynamic datasource properties while it is still building the
+        // application context. Start explicitly here so getJdbcUrl never races the
+        // JUnit Testcontainers extension on Spring Boot 4.
+        POSTGRES.start();
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
