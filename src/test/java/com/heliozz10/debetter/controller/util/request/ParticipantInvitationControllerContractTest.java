@@ -135,6 +135,31 @@ class ParticipantInvitationControllerContractTest {
     }
 
     @Test
+    void acceptedInvitationCannotBeRejectedAndKeepsGrantedAccess() throws Exception {
+        InvitationFixture fixture = invitationFixture();
+
+        mockMvc.perform(post("/api/participant-invitations/{id}/accept", fixture.invitation().getId())
+                        .servletPath("/api")
+                        .with(authentication(authenticationFor(fixture.inviteeUser()))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/participant-invitations/{id}/reject", fixture.invitation().getId())
+                        .servletPath("/api")
+                        .with(authentication(authenticationFor(fixture.inviteeUser()))))
+                .andExpect(status().isBadRequest());
+
+        assertTrue(participantInvitationRepository.findById(fixture.invitation().getId()).orElseThrow().getAccepted());
+        assertTrue(tournamentParticipantRepository.existsByTeam_Tournament_IdAndParticipantProfile_Id(
+                fixture.tournament().getId(),
+                fixture.inviteeProfile().getId()
+        ));
+        assertTrue(userTournamentRoleRepository.findRolesByUserIdAndTournamentId(
+                fixture.inviteeUser().getId(),
+                fixture.tournament().getId()
+        ).contains(TournamentRole.VIEW));
+    }
+
+    @Test
     void rejectingInvitationRemovesPendingInviteWithoutMembershipOrRole() throws Exception {
         InvitationFixture fixture = invitationFixture();
 

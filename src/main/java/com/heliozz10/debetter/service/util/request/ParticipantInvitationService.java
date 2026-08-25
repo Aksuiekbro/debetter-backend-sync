@@ -157,6 +157,10 @@ public class ParticipantInvitationService {
         ParticipantInvitation invitation = participantInvitationRepository.findRawByInviteeIdAndId(inviteeId, invitationId)
                 .orElseThrow(() -> new EntityNotFoundException("Invitation not found"));
 
+        if (Boolean.TRUE.equals(invitation.getAccepted())) {
+            throw new IllegalArgumentException("Accepted invitation cannot be rejected");
+        }
+
         participantInvitationRepository.deleteById(invitationId);
     }
 
