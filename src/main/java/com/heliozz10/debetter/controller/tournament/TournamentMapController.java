@@ -26,6 +26,7 @@ public class TournamentMapController {
     private final TournamentMapService tournamentMapService;
     private final TournamentMapMapper tournamentMapMapper;
 
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     @GetMapping
     public TournamentMapView getMap(@PathVariable Long tournamentId) {
         return tournamentMapMapper.toTournamentMapView(tournamentMapService.getMap(tournamentId));

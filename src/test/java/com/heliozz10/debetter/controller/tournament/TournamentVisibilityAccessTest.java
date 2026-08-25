@@ -288,6 +288,7 @@ class TournamentVisibilityAccessTest {
                 "/api/tournaments/%d/announcements/999999/comments",
                 "/api/tournaments/%d/schedules",
                 "/api/tournaments/%d/schedules/999999",
+                "/api/tournaments/%d/map",
                 "/api/tournaments/%d/judges",
                 "/api/tournaments/%d/judges/999999",
                 "/api/tournaments/%d/feedbacks",
