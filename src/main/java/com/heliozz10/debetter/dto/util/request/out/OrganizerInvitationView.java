@@ -1,5 +1,6 @@
 package com.heliozz10.debetter.dto.util.request.out;
 
+import com.heliozz10.debetter.content.util.request.OrganizerInvitationStatus;
 import com.heliozz10.debetter.dto.tournament.out.TournamentView;
 import com.heliozz10.debetter.dto.user.out.SimpleUserView;
 import lombok.Data;
@@ -14,4 +15,5 @@ public class OrganizerInvitationView {
     private TournamentView tournament;
     private LocalDateTime timestamp;
     private Boolean accepted;
+    private OrganizerInvitationStatus status;
 }

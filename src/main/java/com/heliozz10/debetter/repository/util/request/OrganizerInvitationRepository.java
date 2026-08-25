@@ -31,4 +31,9 @@ public interface OrganizerInvitationRepository extends JpaRepository<OrganizerIn
             select count(o) from OrganizerInvitation o
             where o.inviter.id = ?1 and o.invitee.user.username = ?2 and o.tournament.id = ?3""")
     long countExistingInvitations(Long id, String username, Long id1);
+
+    @Query("""
+            select o from OrganizerInvitation o
+            where o.inviter.id = ?1 and o.invitee.user.username = ?2 and o.tournament.id = ?3""")
+    Optional<OrganizerInvitation> findExistingInvitation(Long inviterId, String inviteeUsername, Long tournamentId);
 }

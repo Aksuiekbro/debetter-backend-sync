@@ -70,4 +70,18 @@ public class OrganizerInvitation {
 
     @Column
     private Boolean accepted;
+
+    /**
+     * Keeps the existing database column backward compatible while exposing a
+     * durable three-state invitation contract. Existing false/true values map
+     * to pending/accepted; null records a declined invitation without deleting
+     * its history.
+     */
+    @Transient
+    public OrganizerInvitationStatus getStatus() {
+        if (accepted == null) {
+            return OrganizerInvitationStatus.DECLINED;
+        }
+        return accepted ? OrganizerInvitationStatus.ACCEPTED : OrganizerInvitationStatus.PENDING;
+    }
 }
