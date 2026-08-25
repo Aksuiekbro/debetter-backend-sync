@@ -1,5 +1,6 @@
 package com.heliozz10.debetter.service.util.request;
 
+import com.heliozz10.debetter.content.tournament.Tournament;
 import com.heliozz10.debetter.content.tournament.TournamentParticipant;
 import com.heliozz10.debetter.content.tournament.team.Team;
 import com.heliozz10.debetter.content.user.User;
@@ -83,6 +84,9 @@ class ParticipantInvitationServiceTest {
         member.setParticipantProfile(inviter);
 
         Team team = new Team();
+        Tournament tournament = new Tournament();
+        tournament.setDisabled(false);
+        team.setTournament(tournament);
         team.setMembers(new ArrayList<>(List.of(member)));
 
         when(participantInvitationRepository.countExistingInvitations(10L, "aisha", 55L)).thenReturn(0L);
