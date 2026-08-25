@@ -21,4 +21,7 @@ public class Url {
      */
     @Column(nullable = false)
     private String url;
+
+    @Column(name = "news_image_order")
+    private Integer newsImageOrder;
 }

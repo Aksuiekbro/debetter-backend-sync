@@ -106,6 +106,16 @@ public class FileService {
         }
     }
 
+    public void deletePhysicalFilesAfterCommit(Collection<Url> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return;
+        }
+
+        for (Url url : urls) {
+            deletePhysicalFileAfterCommit(url);
+        }
+    }
+
     public Path resolveFilePathByUrl(String url) {
         Url entity = urlRepository.findFirstByUrlOrderByIdAsc(url)
                 .orElseThrow(() -> new IllegalArgumentException("File not found for URL: " + url));
