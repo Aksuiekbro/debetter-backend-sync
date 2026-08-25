@@ -32,6 +32,7 @@ public class MatchController {
     private final TournamentSecurity tournamentSecurity;
 
     @GetMapping
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public PageableResult<MatchView> getMatchesByRoundId(
             @PathVariable Long tournamentId,
             @PathVariable Long roundGroupId,

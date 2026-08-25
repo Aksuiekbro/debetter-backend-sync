@@ -33,6 +33,7 @@ public class TeamController {
     private final TournamentService tournamentService;
 
     @GetMapping
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public PageableResult<TeamView> getTeamsByTournamentId(
             @PathVariable Long tournamentId,
             @PageableDefault(page = 0, size = 10) Pageable pageable
@@ -46,6 +47,7 @@ public class TeamController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public TeamView getTeamByTournamentIdAndId(@PathVariable Long tournamentId, @PathVariable Long id) {
         return teamService.toTeamView(teamService.getTeamByTournamentIdAndId(tournamentId, id));
     }

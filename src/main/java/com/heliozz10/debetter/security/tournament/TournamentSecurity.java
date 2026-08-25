@@ -93,4 +93,26 @@ public class TournamentSecurity {
 
         return user.getRole() == Role.ORGANIZER && hasEditPermission(user, tournamentId);
     }
+
+    /**
+     * Visible tournaments are public. A hidden tournament can only be read by
+     * users with EDIT or FULL membership; VIEW intentionally does not bypass a
+     * state presented as hidden from participants.
+     *
+     * Missing tournaments are allowed through so controllers and services keep
+     * their existing not-found behavior instead of turning a 404 into a 403.
+     */
+    public boolean canReadTournament(Authentication authentication, Long tournamentId) {
+        Tournament tournament = tournamentRepository.findById(tournamentId).orElse(null);
+        if (tournament == null || !Boolean.TRUE.equals(tournament.getDisabled())) {
+            return true;
+        }
+
+        if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {
+            return false;
+        }
+
+        Set<TournamentRole> roles = getUserRolesForTournament(user.getId(), tournamentId);
+        return roles.contains(TournamentRole.EDIT) || roles.contains(TournamentRole.FULL);
+    }
 }

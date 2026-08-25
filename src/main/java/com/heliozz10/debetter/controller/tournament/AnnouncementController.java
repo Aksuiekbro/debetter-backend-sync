@@ -36,6 +36,7 @@ public class AnnouncementController {
     private final CommentMapper commentMapper;
 
     @GetMapping
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public PageableResult<AnnouncementView> getAnnouncementsByTournamentId(
             @PathVariable Long tournamentId,
             @RequestParam(required = false) Long authorId,
@@ -52,6 +53,7 @@ public class AnnouncementController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public AnnouncementView getAnnouncementById(@PathVariable Long tournamentId, @PathVariable Long id) {
         return announcementService.toAnnouncementView(announcementService.getAnnouncementByTournamentIdAndId(tournamentId, id));
     }
@@ -79,6 +81,7 @@ public class AnnouncementController {
     }
 
     @GetMapping("/{id}/comments")
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public List<CommentView> getAnnouncementComments(@PathVariable Long tournamentId, @PathVariable Long id) {
         return commentMapper.toCommentViews(announcementService.getAnnouncementComments(tournamentId, id));
     }

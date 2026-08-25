@@ -29,6 +29,7 @@ public class FeedbackController {
     private final FeedbackMapper feedbackMapper;
 
     @GetMapping
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public PageableResult<FeedbackView> getFeedbacks(
             @PathVariable Long tournamentId,
             @Valid @ModelAttribute FeedbackGetParams params,
@@ -43,6 +44,7 @@ public class FeedbackController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public FeedbackView getFeedbackById(@PathVariable Long tournamentId, @PathVariable Long id) {
         return feedbackService.toFeedbackView(feedbackService.getFeedbackByTournamentIdAndId(tournamentId, id));
     }

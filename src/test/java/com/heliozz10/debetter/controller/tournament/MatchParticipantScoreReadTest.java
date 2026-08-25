@@ -118,8 +118,8 @@ class MatchParticipantScoreReadTest {
                 .andExpect(jsonPath("$.content[0].team1ParticipantScores").doesNotExist())
                 .andExpect(jsonPath("$.content[0].team4ParticipantScores").doesNotExist())
                 .andExpect(jsonPath("$.content[0].judge.fullName").value("Judge Privacy"))
-                .andExpect(jsonPath("$.content[0].judge.phoneNumber").value(nullValue()))
-                .andExpect(jsonPath("$.content[0].judge.email").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].judge.phoneNumber").doesNotExist())
+                .andExpect(jsonPath("$.content[0].judge.email").doesNotExist())
                 .andExpect(jsonPath("$.content[0].judge.socialProfiles").value(nullValue()))
                 .andExpect(jsonPath("$.content[0].judge.checkedIn").value(nullValue()));
     }
@@ -143,7 +143,7 @@ class MatchParticipantScoreReadTest {
                 .andExpect(jsonPath("$.content[0].participantScoresRepairable").value(false))
                 .andExpect(jsonPath("$.content[0].team1ParticipantScores").doesNotExist())
                 .andExpect(jsonPath("$.content[0].team4ParticipantScores").doesNotExist())
-                .andExpect(jsonPath("$.content[0].judge.email").value(nullValue()));
+                .andExpect(jsonPath("$.content[0].judge.email").doesNotExist());
     }
 
     @Test
@@ -205,8 +205,8 @@ class MatchParticipantScoreReadTest {
                 .andExpect(jsonPath("$.content[0].debater1.participantProfile").value(nullValue()))
                 .andExpect(jsonPath("$.content[0].debater2.participantProfile").value(nullValue()))
                 .andExpect(jsonPath("$.content[0].judge.fullName").value("LD Judge Privacy"))
-                .andExpect(jsonPath("$.content[0].judge.phoneNumber").value(nullValue()))
-                .andExpect(jsonPath("$.content[0].judge.email").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].judge.phoneNumber").doesNotExist())
+                .andExpect(jsonPath("$.content[0].judge.email").doesNotExist())
                 .andExpect(jsonPath("$.content[0].judge.checkedIn").value(nullValue()));
 
         mockMvc.perform(get(fixture.endpoint())
