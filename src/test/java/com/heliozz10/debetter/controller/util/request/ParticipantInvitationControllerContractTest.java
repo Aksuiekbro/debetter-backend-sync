@@ -35,6 +35,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -157,6 +158,27 @@ class ParticipantInvitationControllerContractTest {
                 fixture.inviteeUser().getId(),
                 fixture.tournament().getId()
         ).contains(TournamentRole.VIEW));
+    }
+
+    @Test
+    void acceptedInvitationCannotBeAcceptedTwice() throws Exception {
+        InvitationFixture fixture = invitationFixture();
+
+        mockMvc.perform(post("/api/participant-invitations/{id}/accept", fixture.invitation().getId())
+                        .servletPath("/api")
+                        .with(authentication(authenticationFor(fixture.inviteeUser()))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/participant-invitations/{id}/accept", fixture.invitation().getId())
+                        .servletPath("/api")
+                        .with(authentication(authenticationFor(fixture.inviteeUser()))))
+                .andExpect(status().isBadRequest());
+
+        long matchingMemberships = tournamentParticipantRepository.findAll().stream()
+                .filter(participant -> participant.getTeam().getTournament().getId().equals(fixture.tournament().getId()))
+                .filter(participant -> participant.getParticipantProfile().getId().equals(fixture.inviteeProfile().getId()))
+                .count();
+        assertEquals(1, matchingMemberships);
     }
 
     @Test

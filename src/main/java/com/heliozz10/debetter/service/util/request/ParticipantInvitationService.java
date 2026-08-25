@@ -124,6 +124,10 @@ public class ParticipantInvitationService {
         ParticipantInvitation invitation = participantInvitationRepository.findByInviteeIdAndId(inviteeId, invitationId)
                 .orElseThrow(() -> new EntityNotFoundException("Invitation not found"));
 
+        if (!Boolean.FALSE.equals(invitation.getAccepted())) {
+            throw new IllegalArgumentException("Invitation has already been handled");
+        }
+
         invitation.setAccepted(true);
 
         Team team = invitation.getTeam();
