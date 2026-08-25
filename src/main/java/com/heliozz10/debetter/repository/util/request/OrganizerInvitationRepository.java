@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -19,10 +20,20 @@ public interface OrganizerInvitationRepository extends JpaRepository<OrganizerIn
     Optional<OrganizerInvitation> findRawByInviteeIdAndId(Long inviteeId, Long id);
 
     @EntityGraph(value = "OrganizerInvitation.forView", type = EntityGraph.EntityGraphType.LOAD)
-    Page<OrganizerInvitation> findByInviterId(Long inviterId, Pageable pageable);
+    @Query("""
+            select o from OrganizerInvitation o
+            where o.inviter.id = :inviterId
+              and (o.tournament.disabled = false or o.tournament.disabled is null)
+            """)
+    Page<OrganizerInvitation> findByInviterId(@Param("inviterId") Long inviterId, Pageable pageable);
 
     @EntityGraph(value = "OrganizerInvitation.forView", type = EntityGraph.EntityGraphType.LOAD)
-    Page<OrganizerInvitation> findByInviteeId(Long inviteeId, Pageable pageable);
+    @Query("""
+            select o from OrganizerInvitation o
+            where o.invitee.id = :inviteeId
+              and (o.tournament.disabled = false or o.tournament.disabled is null)
+            """)
+    Page<OrganizerInvitation> findByInviteeId(@Param("inviteeId") Long inviteeId, Pageable pageable);
 
     @EntityGraph(value = "OrganizerInvitation.forView", type = EntityGraph.EntityGraphType.LOAD)
     Page<OrganizerInvitation> findByTournamentId(Long tournamentId, Pageable pageable);

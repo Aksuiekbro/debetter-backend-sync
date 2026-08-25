@@ -14,6 +14,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +53,11 @@ public class OrganizerInvitationService {
         OrganizerInvitation existingInvitation = organizerInvitationRepository
                 .findExistingInvitation(inviterId, inviteeUsername, tournamentId)
                 .orElse(null);
+        Tournament tournament = existingInvitation == null
+                ? entityManager.getReference(Tournament.class, tournamentId)
+                : existingInvitation.getTournament();
+        requireVisible(tournament);
+
         if (existingInvitation != null) {
             if (existingInvitation.getAccepted() != null) {
                 throw new IllegalArgumentException("Invitation already exists");
@@ -67,7 +73,6 @@ public class OrganizerInvitationService {
         OrganizerProfile inviter = entityManager.getReference(OrganizerProfile.class, inviterId);
         OrganizerProfile invitee = organizerProfileRepository.findByUser_Username(inviteeUsername)
                 .orElseThrow(() -> new EntityNotFoundException("Invitee not found"));
-        Tournament tournament = entityManager.getReference(Tournament.class, tournamentId);
 
         invitation.setInviter(inviter);
         invitation.setInvitee(invitee);
@@ -85,6 +90,7 @@ public class OrganizerInvitationService {
                 .orElseThrow(() -> new EntityNotFoundException("Invitation not found"));
 
         requirePending(invitation);
+        requireVisible(invitation.getTournament());
         invitation.setAccepted(true);
 
         tournamentService.addOrganizerToTournament(invitation.getInvitee().getId(), invitation.getTournament().getId());
@@ -117,6 +123,12 @@ public class OrganizerInvitationService {
     private void requirePending(OrganizerInvitation invitation) {
         if (!Boolean.FALSE.equals(invitation.getAccepted())) {
             throw new IllegalStateException("Invitation has already been handled");
+        }
+    }
+
+    private void requireVisible(Tournament tournament) {
+        if (Boolean.TRUE.equals(tournament.getDisabled())) {
+            throw new AccessDeniedException("Hidden tournament invitations cannot be handled");
         }
     }
 }
