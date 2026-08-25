@@ -14,6 +14,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,10 +50,22 @@ public class OrganizerInvitationService {
 
     @Transactional
     public OrganizerInvitation createInvitation(Long inviterId, String inviteeUsername, Long tournamentId) {
-        long existingInvitationCount = organizerInvitationRepository.countExistingInvitations(inviterId, inviteeUsername, tournamentId);
+        OrganizerInvitation existingInvitation = organizerInvitationRepository
+                .findExistingInvitation(inviterId, inviteeUsername, tournamentId)
+                .orElse(null);
+        Tournament tournament = existingInvitation == null
+                ? entityManager.getReference(Tournament.class, tournamentId)
+                : existingInvitation.getTournament();
+        requireVisible(tournament);
 
-        if (existingInvitationCount > 0) {
-            throw new IllegalArgumentException("Invitation already exists");
+        if (existingInvitation != null) {
+            if (existingInvitation.getAccepted() != null) {
+                throw new IllegalArgumentException("Invitation already exists");
+            }
+
+            existingInvitation.setAccepted(false);
+            existingInvitation.setTimestamp(LocalDateTime.now());
+            return organizerInvitationRepository.save(existingInvitation);
         }
 
         OrganizerInvitation invitation = new OrganizerInvitation();
@@ -60,7 +73,6 @@ public class OrganizerInvitationService {
         OrganizerProfile inviter = entityManager.getReference(OrganizerProfile.class, inviterId);
         OrganizerProfile invitee = organizerProfileRepository.findByUser_Username(inviteeUsername)
                 .orElseThrow(() -> new EntityNotFoundException("Invitee not found"));
-        Tournament tournament = entityManager.getReference(Tournament.class, tournamentId);
 
         invitation.setInviter(inviter);
         invitation.setInvitee(invitee);
@@ -74,9 +86,11 @@ public class OrganizerInvitationService {
 
     @Transactional
     public void acceptInvitation(Long invitationId, Long inviteeId) {
-        OrganizerInvitation invitation = organizerInvitationRepository.findByInviteeIdAndId(invitationId, inviteeId)
+        OrganizerInvitation invitation = organizerInvitationRepository.findByInviteeIdAndId(inviteeId, invitationId)
                 .orElseThrow(() -> new EntityNotFoundException("Invitation not found"));
 
+        requirePending(invitation);
+        requireVisible(invitation.getTournament());
         invitation.setAccepted(true);
 
         tournamentService.addOrganizerToTournament(invitation.getInvitee().getId(), invitation.getTournament().getId());
@@ -84,7 +98,11 @@ public class OrganizerInvitationService {
 
     @Transactional
     public void rejectInvitation(Long invitationId, Long inviteeId) {
-        deleteInvitation(invitationId, inviteeId);
+        OrganizerInvitation invitation = organizerInvitationRepository.findRawByInviteeIdAndId(inviteeId, invitationId)
+                .orElseThrow(() -> new EntityNotFoundException("Invitation not found"));
+
+        requirePending(invitation);
+        invitation.setAccepted(null);
     }
 
     @Transactional
@@ -100,5 +118,17 @@ public class OrganizerInvitationService {
         view.setInviter(userMapper.toSimpleUserView(invitation.getInviter().getUser()));
         view.setInvitee(userMapper.toSimpleUserView(invitation.getInvitee().getUser()));
         return view;
+    }
+
+    private void requirePending(OrganizerInvitation invitation) {
+        if (!Boolean.FALSE.equals(invitation.getAccepted())) {
+            throw new IllegalStateException("Invitation has already been handled");
+        }
+    }
+
+    private void requireVisible(Tournament tournament) {
+        if (Boolean.TRUE.equals(tournament.getDisabled())) {
+            throw new AccessDeniedException("Hidden tournament invitations cannot be handled");
+        }
     }
 }

@@ -60,8 +60,8 @@ public class FeedbackService {
     }
 
     @Transactional
-    public Feedback updateFeedback(FeedbackDto dto, Long feedbackId, Long authorId) {
-        Feedback feedback = feedbackRepository.findByAuthorIdAndId(authorId, feedbackId)
+    public Feedback updateFeedback(FeedbackDto dto, Long tournamentId, Long feedbackId, Long authorId) {
+        Feedback feedback = feedbackRepository.findByTournamentIdAndAuthorIdAndId(tournamentId, authorId, feedbackId)
                 .orElseThrow(() -> new EntityNotFoundException("Feedback not found"));
 
         feedbackMapper.updateFeedback(dto, feedback);
@@ -71,8 +71,8 @@ public class FeedbackService {
     }
 
     @Transactional
-    public void deleteFeedback(Long feedbackId, Long authorId) {
-        Feedback feedback = feedbackRepository.findByAuthorIdAndId(authorId, feedbackId)
+    public void deleteFeedback(Long tournamentId, Long feedbackId, Long authorId) {
+        Feedback feedback = feedbackRepository.findByTournamentIdAndAuthorIdAndId(tournamentId, authorId, feedbackId)
                 .orElseThrow(() -> new EntityNotFoundException("Feedback not found"));
 
         feedbackRepository.delete(feedback);

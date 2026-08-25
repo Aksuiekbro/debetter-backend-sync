@@ -86,15 +86,17 @@ public class AnnouncementController {
         return commentMapper.toCommentViews(announcementService.getAnnouncementComments(tournamentId, id));
     }
 
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     @PostMapping("/{id}/comments")
     public void addCommentToAnnouncement(@PathVariable Long tournamentId, @PathVariable Long id, @Valid @RequestBody CommentDto dto, Authentication authentication) {
         Long authorId = ((User) authentication.getPrincipal()).getId();
         announcementService.addCommentToAnnouncement(tournamentId, id, authorId, dto);
     }
 
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     @DeleteMapping("/{id}/comments/{commentId}")
-    public void removeCommentFromAnnouncement(@PathVariable Long commentId, Authentication authentication) {
+    public void removeCommentFromAnnouncement(@PathVariable Long tournamentId, @PathVariable Long id, @PathVariable Long commentId, Authentication authentication) {
         Long authorId = ((User) authentication.getPrincipal()).getId();
-        announcementService.removeCommentFromAnnouncement(authorId, commentId);
+        announcementService.removeCommentFromAnnouncement(tournamentId, id, authorId, commentId);
     }
 }

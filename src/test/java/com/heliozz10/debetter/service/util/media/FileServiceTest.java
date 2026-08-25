@@ -138,6 +138,24 @@ class FileServiceTest {
     }
 
     @Test
+    void uploadImageNormalizesUppercaseExtensionInStoredPathAndPublicUrl() throws IOException {
+        MockMultipartFile image = new MockMultipartFile(
+                "image",
+                "PHOTO.JPG",
+                "image/jpeg",
+                "photo contents".getBytes()
+        );
+        configureStorage();
+        when(fileUploadProperties.getMaxFileSize()).thenReturn(5L * 1024 * 1024);
+        when(urlRepository.save(any(Url.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Url uploaded = fileService.uploadImage(image, "news/images", "photo-id");
+
+        assertEquals("/uploads/images/news/images/photo-id.jpg", uploaded.getUrl());
+        assertTrue(Files.exists(uploadDirectory.resolve("images/news/images/photo-id.jpg")));
+    }
+
+    @Test
     void interruptedUploadRemovesThePartialFileAndReturnsAUsefulStorageError() throws IOException {
         MultipartFile image = org.mockito.Mockito.mock(MultipartFile.class);
         when(image.isEmpty()).thenReturn(false);

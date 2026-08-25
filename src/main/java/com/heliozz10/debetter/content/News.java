@@ -49,6 +49,7 @@ public class News {
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "news_id")
+    @OrderBy("newsImageOrder ASC, id ASC")
     private List<Url> images;
 
     @FullTextField(analyzer = "edge_ngram")

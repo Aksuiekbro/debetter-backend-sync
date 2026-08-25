@@ -20,6 +20,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,12 +49,12 @@ public class ParticipantInvitationService {
 
     @Transactional(readOnly = true)
     public Page<ParticipantInvitation> getInvitationsByInviteeId(Long inviteeId, Pageable pageable) {
-        return participantInvitationRepository.findByInviteeId(inviteeId, pageable);
+        return participantInvitationRepository.findVisibleByInviteeId(inviteeId, pageable);
     }
 
     @Transactional(readOnly = true)
     public Page<ParticipantInvitation> getInvitationsByInviterId(Long inviterId, Pageable pageable) {
-        return participantInvitationRepository.findByInviterId(inviterId, pageable);
+        return participantInvitationRepository.findVisibleByInviterId(inviterId, pageable);
     }
 
     @Transactional(readOnly = true)
@@ -90,6 +91,10 @@ public class ParticipantInvitationService {
         Team team = teamRepository.findFullById(teamId)
                 .orElseThrow(() -> new EntityNotFoundException("Team not found"));
 
+        if (Boolean.TRUE.equals(team.getTournament().getDisabled())) {
+            throw new AccessDeniedException("Hidden tournament invitations cannot be created");
+        }
+
         if(!team.getMembers().stream().anyMatch(member -> member.getParticipantProfile().getId().equals(inviterId))) {
             throw new IllegalArgumentException("Inviter is not a member of the team");
         }
@@ -124,9 +129,16 @@ public class ParticipantInvitationService {
         ParticipantInvitation invitation = participantInvitationRepository.findByInviteeIdAndId(inviteeId, invitationId)
                 .orElseThrow(() -> new EntityNotFoundException("Invitation not found"));
 
-        invitation.setAccepted(true);
+        if (!Boolean.FALSE.equals(invitation.getAccepted())) {
+            throw new IllegalArgumentException("Invitation has already been handled");
+        }
 
         Team team = invitation.getTeam();
+        if (Boolean.TRUE.equals(team.getTournament().getDisabled())) {
+            throw new AccessDeniedException("Hidden tournament invitations cannot be accepted");
+        }
+
+        invitation.setAccepted(true);
 
         int newSize = team.getMembers().size() + 1;
         int maxSize = team.getTournament().getPreliminaryFormat() == DebateFormat.KP ? 3 : 2;
@@ -156,6 +168,10 @@ public class ParticipantInvitationService {
     public void deleteInvitation(Long invitationId, Long inviteeId) {
         ParticipantInvitation invitation = participantInvitationRepository.findRawByInviteeIdAndId(inviteeId, invitationId)
                 .orElseThrow(() -> new EntityNotFoundException("Invitation not found"));
+
+        if (Boolean.TRUE.equals(invitation.getAccepted())) {
+            throw new IllegalArgumentException("Accepted invitation cannot be rejected");
+        }
 
         participantInvitationRepository.deleteById(invitationId);
     }

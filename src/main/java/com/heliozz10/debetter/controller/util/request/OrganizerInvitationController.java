@@ -6,8 +6,6 @@ import com.heliozz10.debetter.content.util.request.OrganizerInvitation;
 import com.heliozz10.debetter.dto.common.out.PageableResult;
 import com.heliozz10.debetter.dto.util.request.in.OrganizerInvitationDto;
 import com.heliozz10.debetter.dto.util.request.out.OrganizerInvitationView;
-import com.heliozz10.debetter.mapper.user.UserMapper;
-import com.heliozz10.debetter.mapper.util.request.OrganizerInvitationMapper;
 import com.heliozz10.debetter.service.util.request.OrganizerInvitationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +24,6 @@ import java.util.Objects;
 @RequestMapping("/organizer-invitations")
 public class OrganizerInvitationController {
     private final OrganizerInvitationService organizerInvitationService;
-    private final OrganizerInvitationMapper organizerInvitationMapper;
-
-    private final UserMapper userMapper;
 
     @GetMapping("/sent")
     public PageableResult<OrganizerInvitationView> getSentOrganizerInvitations(
@@ -60,6 +55,7 @@ public class OrganizerInvitationController {
         );
     }
 
+    @PreAuthorize("@tournamentSecurity.hasFullPermission(principal, #dto.tournamentId())")
     @PostMapping
     public OrganizerInvitationView createOrganizerInvitation(@Valid @RequestBody OrganizerInvitationDto dto, Authentication authentication) {
         User user = (User) authentication.getPrincipal();
@@ -70,7 +66,12 @@ public class OrganizerInvitationController {
             throw new IllegalArgumentException("Cannot invite yourself");
         }
         OrganizerProfile profile = (OrganizerProfile) user.getProfile();
-        return organizerInvitationMapper.toOrganizerInvitationView(organizerInvitationService.createInvitation(profile.getId(), dto.inviteeUsername(), dto.tournamentId()));
+        OrganizerInvitation invitation = organizerInvitationService.createInvitation(
+                profile.getId(),
+                dto.inviteeUsername(),
+                dto.tournamentId()
+        );
+        return organizerInvitationService.toOrganizerInvitationView(invitation);
     }
 
     @PostMapping("/{id}/accept")

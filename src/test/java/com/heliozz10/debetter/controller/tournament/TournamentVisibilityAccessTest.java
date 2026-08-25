@@ -20,8 +20,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -32,8 +35,10 @@ import java.util.stream.Stream;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -158,6 +163,52 @@ class TournamentVisibilityAccessTest {
                 .andExpect(jsonPath("$.disabled").value(false));
     }
 
+    @ParameterizedTest(name = "VIEW member cannot mutate hidden tournament via {0}")
+    @MethodSource("hiddenTournamentMutationRequests")
+    void viewMemberCannotMutateHiddenTournament(MutationRequest mutation) throws Exception {
+        Tournament hidden = tournamentRepository.saveAndFlush(tournament("Hidden Mutation Cup", true));
+        UsernamePasswordAuthenticationToken viewer = grant(hidden, TournamentRole.VIEW, Role.PARTICIPANT);
+
+        mockMvc.perform(mutationRequest(mutation, hidden.getId())
+                        .servletPath("/api")
+                        .with(authentication(viewer)))
+                .andExpect(status().isForbidden());
+    }
+
+    @ParameterizedTest(name = "guest cannot mutate hidden tournament via {0}")
+    @MethodSource("hiddenTournamentMutationRequests")
+    void guestCannotMutateHiddenTournament(MutationRequest mutation) throws Exception {
+        Tournament hidden = tournamentRepository.saveAndFlush(tournament("Hidden Guest Mutation Cup", true));
+
+        mockMvc.perform(mutationRequest(mutation, hidden.getId())
+                        .servletPath("/api"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void editOrganizerCanStillUpdateHiddenTournament() throws Exception {
+        Tournament hidden = tournamentRepository.saveAndFlush(tournament("Hidden Editable Cup", true));
+        UsernamePasswordAuthenticationToken editor = grant(hidden, TournamentRole.EDIT, Role.ORGANIZER);
+        MockMultipartFile data = new MockMultipartFile(
+                "data",
+                "tournament.json",
+                MediaType.APPLICATION_JSON_VALUE,
+                "{\"name\":\"Hidden Editable Cup Renamed\"}".getBytes()
+        );
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/tournaments/{id}", hidden.getId())
+                        .file(data)
+                        .with(request -> {
+                            request.setMethod("PATCH");
+                            return request;
+                        })
+                        .servletPath("/api")
+                        .with(authentication(editor)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Hidden Editable Cup Renamed"));
+    }
+
     @Test
     void missingTournamentStillUsesNotFoundResponse() throws Exception {
         mockMvc.perform(get("/api/tournaments/{id}", Long.MAX_VALUE).servletPath("/api"))
@@ -237,6 +288,7 @@ class TournamentVisibilityAccessTest {
                 "/api/tournaments/%d/announcements/999999/comments",
                 "/api/tournaments/%d/schedules",
                 "/api/tournaments/%d/schedules/999999",
+                "/api/tournaments/%d/map",
                 "/api/tournaments/%d/judges",
                 "/api/tournaments/%d/judges/999999",
                 "/api/tournaments/%d/feedbacks",
@@ -246,5 +298,65 @@ class TournamentVisibilityAccessTest {
                 "/api/tournaments/%d/round-groups/999999/rounds/999999",
                 "/api/tournaments/%d/round-groups/999999/rounds/999999/matches"
         );
+    }
+
+    private static Stream<MutationRequest> hiddenTournamentMutationRequests() {
+        return Stream.of(
+                new MutationRequest(
+                        "POST",
+                        "/api/tournaments/%d/teams",
+                        "{\"name\":\"Hidden Team\",\"club\":\"Hidden Club\",\"creatorId\":1}"
+                ),
+                new MutationRequest(
+                        "PATCH",
+                        "/api/tournaments/%d/teams/999999/participant-update",
+                        "{\"name\":\"Hidden Team\",\"club\":\"Hidden Club\"}"
+                ),
+                new MutationRequest(
+                        "POST",
+                        "/api/tournaments/%d/feedbacks",
+                        "{\"title\":\"Hidden Feedback\",\"content\":\"Hidden content\"}"
+                ),
+                new MutationRequest(
+                        "PATCH",
+                        "/api/tournaments/%d/feedbacks/999999",
+                        "{\"title\":\"Hidden Feedback\",\"content\":\"Hidden content\"}"
+                ),
+                new MutationRequest(
+                        "DELETE",
+                        "/api/tournaments/%d/feedbacks/999999",
+                        ""
+                ),
+                new MutationRequest(
+                        "POST",
+                        "/api/tournaments/%d/announcements/999999/comments",
+                        "{\"content\":\"Hidden comment\"}"
+                ),
+                new MutationRequest(
+                        "DELETE",
+                        "/api/tournaments/%d/announcements/999999/comments/999999",
+                        ""
+                )
+        );
+    }
+
+    private static MockHttpServletRequestBuilder mutationRequest(MutationRequest mutation, Long tournamentId) {
+        MockHttpServletRequestBuilder request = switch (mutation.method()) {
+            case "POST" -> post(mutation.path().formatted(tournamentId));
+            case "PATCH" -> patch(mutation.path().formatted(tournamentId));
+            case "DELETE" -> delete(mutation.path().formatted(tournamentId));
+            default -> throw new IllegalArgumentException("Unsupported method: " + mutation.method());
+        };
+        if (!mutation.body().isEmpty()) {
+            request.contentType(MediaType.APPLICATION_JSON).content(mutation.body());
+        }
+        return request;
+    }
+
+    private record MutationRequest(String method, String path, String body) {
+        @Override
+        public String toString() {
+            return method + " " + path;
+        }
     }
 }
