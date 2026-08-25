@@ -177,8 +177,8 @@ public class AnnouncementService {
     }
 
     @Transactional
-    public void removeCommentFromAnnouncement(Long authorId, Long commentId) {
-        Comment comment = commentRepository.findByAuthorIdAndId(authorId, commentId)
+    public void removeCommentFromAnnouncement(Long tournamentId, Long announcementId, Long authorId, Long commentId) {
+        Comment comment = commentRepository.findOwnedComment(tournamentId, announcementId, authorId, commentId)
                 .orElseThrow(() -> new EntityNotFoundException("Comment not found"));
 
         comment.getAnnouncement().getComments().removeIf(c -> Objects.equals(c.getId(), commentId));

@@ -182,6 +182,28 @@ class ParticipantInvitationControllerContractTest {
     }
 
     @Test
+    void hiddenTournamentInvitationCannotBeAccepted() throws Exception {
+        InvitationFixture fixture = invitationFixture();
+        fixture.tournament().setDisabled(true);
+        tournamentRepository.saveAndFlush(fixture.tournament());
+
+        mockMvc.perform(post("/api/participant-invitations/{id}/accept", fixture.invitation().getId())
+                        .servletPath("/api")
+                        .with(authentication(authenticationFor(fixture.inviteeUser()))))
+                .andExpect(status().isForbidden());
+
+        assertFalse(participantInvitationRepository.findById(fixture.invitation().getId()).orElseThrow().getAccepted());
+        assertFalse(tournamentParticipantRepository.existsByTeam_Tournament_IdAndParticipantProfile_Id(
+                fixture.tournament().getId(),
+                fixture.inviteeProfile().getId()
+        ));
+        assertTrue(userTournamentRoleRepository.findRolesByUserIdAndTournamentId(
+                fixture.inviteeUser().getId(),
+                fixture.tournament().getId()
+        ).isEmpty());
+    }
+
+    @Test
     void rejectingInvitationRemovesPendingInviteWithoutMembershipOrRole() throws Exception {
         InvitationFixture fixture = invitationFixture();
 

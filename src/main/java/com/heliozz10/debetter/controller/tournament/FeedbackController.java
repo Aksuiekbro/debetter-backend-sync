@@ -62,7 +62,7 @@ public class FeedbackController {
     public FeedbackView updateFeedback(Authentication authentication, @PathVariable Long tournamentId, @PathVariable Long id, @Valid @RequestBody FeedbackDto dto) {
         User user = (User) authentication.getPrincipal();
         ParticipantProfile profile = (ParticipantProfile) user.getProfile();
-        return feedbackService.toFeedbackView(feedbackService.updateFeedback(dto, id, profile.getId()));
+        return feedbackService.toFeedbackView(feedbackService.updateFeedback(dto, tournamentId, id, profile.getId()));
     }
 
     @PreAuthorize("principal.role.name() == 'PARTICIPANT' and @tournamentSecurity.canReadTournament(authentication, #tournamentId)")
@@ -70,6 +70,6 @@ public class FeedbackController {
     public void deleteFeedback(Authentication authentication, @PathVariable Long tournamentId, @PathVariable Long id) {
         User user = (User) authentication.getPrincipal();
         ParticipantProfile profile = (ParticipantProfile) user.getProfile();
-        feedbackService.deleteFeedback(id, profile.getId());
+        feedbackService.deleteFeedback(tournamentId, id, profile.getId());
     }
 }

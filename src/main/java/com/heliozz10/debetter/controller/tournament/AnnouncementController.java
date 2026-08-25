@@ -95,8 +95,8 @@ public class AnnouncementController {
 
     @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     @DeleteMapping("/{id}/comments/{commentId}")
-    public void removeCommentFromAnnouncement(@PathVariable Long tournamentId, @PathVariable Long commentId, Authentication authentication) {
+    public void removeCommentFromAnnouncement(@PathVariable Long tournamentId, @PathVariable Long id, @PathVariable Long commentId, Authentication authentication) {
         Long authorId = ((User) authentication.getPrincipal()).getId();
-        announcementService.removeCommentFromAnnouncement(authorId, commentId);
+        announcementService.removeCommentFromAnnouncement(tournamentId, id, authorId, commentId);
     }
 }

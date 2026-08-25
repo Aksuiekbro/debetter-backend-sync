@@ -26,4 +26,5 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long>, JpaSp
     @EntityGraph(value = "Feedback.forView", type = EntityGraph.EntityGraphType.LOAD)
     Optional<Feedback> findByTournamentIdAndId(Long tournamentId, Long id);
     Optional<Feedback> findByAuthorIdAndId(Long authorId, Long id);
+    Optional<Feedback> findByTournamentIdAndAuthorIdAndId(Long tournamentId, Long authorId, Long id);
 }

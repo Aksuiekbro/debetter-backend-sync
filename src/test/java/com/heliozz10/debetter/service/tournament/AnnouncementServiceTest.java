@@ -2,6 +2,8 @@ package com.heliozz10.debetter.service.tournament;
 
 import com.heliozz10.debetter.content.tournament.Tournament;
 import com.heliozz10.debetter.content.tournament.announcement.Announcement;
+import com.heliozz10.debetter.content.tournament.announcement.Comment;
+import com.heliozz10.debetter.content.user.User;
 import com.heliozz10.debetter.content.user.profile.OrganizerProfile;
 import com.heliozz10.debetter.content.util.media.Url;
 import com.heliozz10.debetter.dto.tournament.announcement.in.AnnouncementFormDto;
@@ -22,12 +24,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -167,6 +173,27 @@ class AnnouncementServiceTest {
 
         verify(fileService).deletePhysicalFileAfterCommit(announcement.getImageUrl());
         verify(announcementRepository).delete(announcement);
+    }
+
+    @Test
+    void removingACommentBindsAuthorCommentAnnouncementAndTournamentIds() {
+        Tournament tournament = new Tournament();
+        tournament.setId(53L);
+        Announcement announcement = new Announcement();
+        announcement.setId(11L);
+        announcement.setTournament(tournament);
+        User author = new User();
+        author.setId(7L);
+        Comment comment = new Comment("My comment", LocalDateTime.now(), announcement, author);
+        comment.setId(19L);
+        announcement.setComments(new ArrayList<>(List.of(comment)));
+
+        when(commentRepository.findOwnedComment(53L, 11L, 7L, 19L)).thenReturn(Optional.of(comment));
+
+        announcementService.removeCommentFromAnnouncement(53L, 11L, 7L, 19L);
+
+        verify(commentRepository).findOwnedComment(53L, 11L, 7L, 19L);
+        assertTrue(announcement.getComments().isEmpty());
     }
 
     private static Url imageUrl(String value) {
