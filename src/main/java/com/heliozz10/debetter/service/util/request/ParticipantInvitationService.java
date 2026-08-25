@@ -49,12 +49,12 @@ public class ParticipantInvitationService {
 
     @Transactional(readOnly = true)
     public Page<ParticipantInvitation> getInvitationsByInviteeId(Long inviteeId, Pageable pageable) {
-        return participantInvitationRepository.findByInviteeId(inviteeId, pageable);
+        return participantInvitationRepository.findVisibleByInviteeId(inviteeId, pageable);
     }
 
     @Transactional(readOnly = true)
     public Page<ParticipantInvitation> getInvitationsByInviterId(Long inviterId, Pageable pageable) {
-        return participantInvitationRepository.findByInviterId(inviterId, pageable);
+        return participantInvitationRepository.findVisibleByInviterId(inviterId, pageable);
     }
 
     @Transactional(readOnly = true)
@@ -90,6 +90,10 @@ public class ParticipantInvitationService {
 
         Team team = teamRepository.findFullById(teamId)
                 .orElseThrow(() -> new EntityNotFoundException("Team not found"));
+
+        if (Boolean.TRUE.equals(team.getTournament().getDisabled())) {
+            throw new AccessDeniedException("Hidden tournament invitations cannot be created");
+        }
 
         if(!team.getMembers().stream().anyMatch(member -> member.getParticipantProfile().getId().equals(inviterId))) {
             throw new IllegalArgumentException("Inviter is not a member of the team");

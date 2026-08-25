@@ -116,6 +116,49 @@ class ParticipantInvitationControllerContractTest {
     }
 
     @Test
+    void hiddenTournamentInvitationsAreExcludedFromSentAndReceivedPages() throws Exception {
+        InvitationFixture fixture = invitationFixture();
+        fixture.tournament().setDisabled(true);
+        tournamentRepository.saveAndFlush(fixture.tournament());
+
+        mockMvc.perform(get("/api/participant-invitations/sent")
+                        .servletPath("/api")
+                        .with(authentication(authenticationFor(fixture.inviterUser()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+        mockMvc.perform(get("/api/participant-invitations/received")
+                        .servletPath("/api")
+                        .with(authentication(authenticationFor(fixture.inviteeUser()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    void hiddenTournamentParticipantInvitationCannotBeCreated() throws Exception {
+        InvitationFixture fixture = invitationFixture();
+        fixture.tournament().setDisabled(true);
+        tournamentRepository.saveAndFlush(fixture.tournament());
+        long invitationCount = participantInvitationRepository.count();
+
+        mockMvc.perform(post("/api/participant-invitations")
+                        .servletPath("/api")
+                        .contentType("application/json")
+                        .content("""
+                                {"inviteeUsername":"%s","teamId":%d}
+                                """.formatted(
+                                fixture.otherUser().getUsername(),
+                                fixture.invitation().getTeam().getId()
+                        ))
+                        .with(authentication(authenticationFor(fixture.inviterUser()))))
+                .andExpect(status().isForbidden());
+
+        assertEquals(invitationCount, participantInvitationRepository.count());
+    }
+
+    @Test
     void acceptingInvitationAddsTeamMembershipAndViewRole() throws Exception {
         InvitationFixture fixture = invitationFixture();
 
