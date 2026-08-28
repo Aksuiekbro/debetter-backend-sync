@@ -5,19 +5,23 @@ import com.heliozz10.debetter.content.tournament.team.Team;
 import com.heliozz10.debetter.dto.tournament.out.SimpleTournamentParticipantView;
 import com.heliozz10.debetter.dto.tournament.out.TournamentParticipantView;
 import com.heliozz10.debetter.dto.tournament.team.out.SimpleTeamView;
+import com.heliozz10.debetter.mapper.user.UserMapper;
 import com.heliozz10.debetter.mapper.user.profile.ParticipantProfileMapper;
 import org.mapstruct.AfterMapping;
 import org.mapstruct.InheritConfiguration;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 
 @Mapper(componentModel = "spring", uses = {
-        ParticipantProfileMapper.class
+        ParticipantProfileMapper.class,
+        UserMapper.class
 })
 public interface TournamentParticipantMapper {
+    @Mapping(target = "user", source = "participantProfile.user")
     SimpleTournamentParticipantView toSimpleTournamentParticipantView(TournamentParticipant tournament);
 
     @InheritConfiguration(name = "toSimpleTournamentParticipantView")

@@ -204,6 +204,8 @@ class MatchParticipantScoreReadTest {
                 .andExpect(jsonPath("$.content[0].debater2.speakerScore").doesNotExist())
                 .andExpect(jsonPath("$.content[0].debater1.participantProfile").value(nullValue()))
                 .andExpect(jsonPath("$.content[0].debater2.participantProfile").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].debater1.user.firstName").value("Test"))
+                .andExpect(jsonPath("$.content[0].debater2.user.lastName").value("User"))
                 .andExpect(jsonPath("$.content[0].judge.fullName").value("LD Judge Privacy"))
                 .andExpect(jsonPath("$.content[0].judge.phoneNumber").doesNotExist())
                 .andExpect(jsonPath("$.content[0].judge.email").doesNotExist())
