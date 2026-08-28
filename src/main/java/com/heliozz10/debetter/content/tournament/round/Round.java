@@ -20,7 +20,33 @@ import java.util.List;
         @NamedEntityGraph(
                 name = "Round.forView",
                 attributeNodes = {
-                        @NamedAttributeNode("matches")
+                        @NamedAttributeNode(value = "matches", subgraph = "matchSubgraph")
+                },
+                subgraphs = {
+                        @NamedSubgraph(
+                                name = "matchSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode("team1"),
+                                        @NamedAttributeNode("team2"),
+                                        @NamedAttributeNode("team3"),
+                                        @NamedAttributeNode("team4"),
+                                        @NamedAttributeNode(value = "debater1", subgraph = "debaterSubgraph"),
+                                        @NamedAttributeNode(value = "debater2", subgraph = "debaterSubgraph"),
+                                        @NamedAttributeNode("judge")
+                                }
+                        ),
+                        @NamedSubgraph(
+                                name = "debaterSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode(value = "participantProfile", subgraph = "profileSubgraph")
+                                }
+                        ),
+                        @NamedSubgraph(
+                                name = "profileSubgraph",
+                                attributeNodes = {
+                                        @NamedAttributeNode("user")
+                                }
+                        )
                 }
         ),
         @NamedEntityGraph(

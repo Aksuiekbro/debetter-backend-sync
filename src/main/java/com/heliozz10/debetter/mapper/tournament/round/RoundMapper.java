@@ -13,28 +13,28 @@ import java.util.List;
 
 @Mapper(
         componentModel = "spring",
-        uses = {
-            MatchMapper.class
-        },
         nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE
 )
-public interface RoundMapper {
-    void updateRound(RoundUpdateDto dto, @MappingTarget Round round);
+public abstract class RoundMapper {
+    @Autowired
+    protected MatchMapper matchMapper;
 
-    SimpleRoundView toSimpleRoundView(Round round);
+    public abstract void updateRound(RoundUpdateDto dto, @MappingTarget Round round);
 
-    List<SimpleRoundView> toSimpleRoundViews(List<Round> rounds);
+    public abstract SimpleRoundView toSimpleRoundView(Round round);
+
+    public abstract List<SimpleRoundView> toSimpleRoundViews(List<Round> rounds);
 
     @InheritConfiguration(name = "toSimpleRoundView")
     @Mapping(target = "matches", ignore = true)
-    RoundView toRoundView(Round round);
+    public abstract RoundView toRoundView(Round round);
 
     @AfterMapping
-    default void mapMatchesIfPublic(Round round, @MappingTarget RoundView roundView, @Autowired MatchMapper matchMapper) {
+    protected void mapMatchesIfPublic(Round round, @MappingTarget RoundView roundView) {
         if (Boolean.TRUE.equals(round.getMatchesArePublic())) {
-            roundView.setMatches( matchMapper.toMatchViews(round.getMatches()) );
+            roundView.setMatches(matchMapper.toMatchViews(round.getMatches()));
         }
     }
 
-    List<RoundView> toRoundViews(List<Round> rounds);
+    public abstract List<RoundView> toRoundViews(List<Round> rounds);
 }

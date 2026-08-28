@@ -51,7 +51,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.jpa.open-in-view=false")
 @AutoConfigureMockMvc
 @Transactional
 class MatchParticipantScoreReadTest {
@@ -224,6 +224,17 @@ class MatchParticipantScoreReadTest {
                 .andExpect(jsonPath("$.content[0].judge.phoneNumber").value("+77020000000"))
                 .andExpect(jsonPath("$.content[0].judge.email").value("ld-judge@example.invalid"))
                 .andExpect(jsonPath("$.content[0].judge.checkedIn").value(true));
+    }
+
+    @Test
+    void publicLdRoundReadIncludesParticipantNamesWithOpenInViewDisabled() throws Exception {
+        LdFixture fixture = ldFixture();
+        String roundEndpoint = fixture.endpoint().replaceFirst("/matches$", "");
+
+        mockMvc.perform(get(roundEndpoint).servletPath("/api"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.matches[0].debater1.user.firstName").value("Test"))
+                .andExpect(jsonPath("$.matches[0].debater2.user.lastName").value("User"));
     }
 
     @Test
