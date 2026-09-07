@@ -30,8 +30,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -136,6 +138,126 @@ class RoundServiceTest {
         assertEquals(1, captor.getValue().size());
         assertSame(round, captor.getValue().get(0).getRound());
         verify(matchRepository).findByRoundIdAndJudgeIsNullOrderByIdAsc(201L);
+    }
+
+    @Test
+    void regeneratingApfPairingsExcludesATeamDisqualifiedAfterRoundSeeding() {
+        Round round = pairingRound();
+        Team disqualified = team(3L);
+        disqualified.setDisqualified(true);
+        round.getTeams().add(disqualified);
+        when(roundRepository.findWithPairingStateByTournamentAndRoundGroupAndId(53L, 101L, 201L))
+                .thenReturn(Optional.of(round));
+        when(teamMatchupHistoryRepository.findByTeam1InAndTeam2In(anyList(), anyList())).thenReturn(List.of());
+        when(judgeRepository.findByTournamentIdAndCheckedInTrueOrderByTimesJudgedAscIdAsc(53L))
+                .thenReturn(List.of(judge(1L, 0)));
+
+        roundService.regenerateMatches(53L, 101L, 201L);
+
+        ArgumentCaptor<List<Match>> captor = ArgumentCaptor.forClass(List.class);
+        verify(matchRepository).saveAll(captor.capture());
+        assertEquals(1, captor.getValue().size());
+        Match generated = captor.getValue().getFirst();
+        assertTrue(List.of(1L, 2L).contains(generated.getTeam1().getId()));
+        assertTrue(List.of(1L, 2L).contains(generated.getTeam2().getId()));
+        assertFalse(Boolean.TRUE.equals(generated.getIsBye()));
+    }
+
+    @Test
+    void generatingLdPairingsExcludesDebatersWhoseTeamsWereDisqualified() {
+        Round round = pairingRound();
+        round.setCustomFormat(DebateFormat.LD);
+        TournamentParticipant first = new TournamentParticipant();
+        first.setId(701L);
+        first.setTeam(team(1L));
+        TournamentParticipant second = new TournamentParticipant();
+        second.setId(702L);
+        second.setTeam(team(2L));
+        TournamentParticipant excluded = new TournamentParticipant();
+        excluded.setId(703L);
+        excluded.setTeam(team(3L));
+        excluded.getTeam().setDisqualified(true);
+        round.setDebaters(List.of(first, second, excluded));
+        when(debaterMatchupHistoryRepository.findByDebater1InAndDebater2In(anyList(), anyList()))
+                .thenReturn(List.of());
+
+        roundService.generateMatches(round);
+
+        ArgumentCaptor<List<Match>> captor = ArgumentCaptor.forClass(List.class);
+        verify(matchRepository).saveAll(captor.capture());
+        assertEquals(1, captor.getValue().size());
+        Match generated = captor.getValue().getFirst();
+        assertTrue(List.of(701L, 702L).contains(generated.getDebater1().getId()));
+        assertTrue(List.of(701L, 702L).contains(generated.getDebater2().getId()));
+        assertFalse(Boolean.TRUE.equals(generated.getIsBye()));
+    }
+
+    @Test
+    void regenerationRejectsAnEmptyEligibleFieldBeforeSavingNewMatches() {
+        Round round = pairingRound();
+        round.getTeams().forEach(team -> team.setDisqualified(true));
+        when(roundRepository.findWithPairingStateByTournamentAndRoundGroupAndId(53L, 101L, 201L))
+                .thenReturn(Optional.of(round));
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> roundService.regenerateMatches(53L, 101L, 201L));
+
+        assertTrue(exception.getMessage().contains("No eligible entrants"));
+        verifyNoInteractions(matchRepository, teamMatchupHistoryRepository, judgeRepository);
+    }
+
+    @Test
+    void disqualificationCannotSilentlyDropAnotherEligibleEntrant() {
+        Round round = pairingRound();
+        round.getTeams().add(team(3L));
+        Team excluded = team(4L);
+        excluded.setDisqualified(true);
+        round.getTeams().add(excluded);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> roundService.generateMatches(round));
+
+        assertTrue(exception.getMessage().contains("do not fill complete matches"));
+        verifyNoInteractions(matchRepository, teamMatchupHistoryRepository);
+    }
+
+    @Test
+    void disqualifiedEliminationWinnerCannotAdvance() {
+        Team winner = team(1L);
+        winner.setDisqualified(true);
+        Match match = completedTeamMatch(DebateFormat.APF, winner, team(2L));
+        match.setTeam1Won(true);
+        match.setTeam2Won(false);
+        when(matchRepository.findByRoundId(201L)).thenReturn(List.of(match));
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> roundService.getMatchWinnerTeams(201L));
+
+        assertTrue(exception.getMessage().contains("disqualified team"));
+    }
+
+    @Test
+    void ldWinnerFromADisqualifiedTeamCannotAdvance() {
+        Round round = pairingRound();
+        round.setCustomFormat(DebateFormat.LD);
+        TournamentParticipant winner = new TournamentParticipant();
+        winner.setId(701L);
+        winner.setTeam(team(1L));
+        winner.getTeam().setDisqualified(true);
+        TournamentParticipant other = new TournamentParticipant();
+        other.setId(702L);
+        Match match = new Match();
+        match.setRound(round);
+        match.setCompleted(true);
+        match.setDebater1(winner);
+        match.setDebater2(other);
+        match.setWinnerParticipantId(winner.getId());
+        when(matchRepository.findByRoundId(201L)).thenReturn(List.of(match));
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> roundService.getMatchWinnerDebaters(201L));
+
+        assertTrue(exception.getMessage().contains("disqualified team"));
     }
 
     @Test

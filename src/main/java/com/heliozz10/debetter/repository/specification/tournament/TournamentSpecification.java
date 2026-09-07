@@ -17,8 +17,7 @@ import java.util.List;
 public class TournamentSpecification {
     /**
      * Filters shared by public discovery and principal-scoped tournament queries.
-     * Visibility is deliberately not part of this specification so authenticated
-     * membership queries can apply their own role-aware visibility rules.
+     * Result visibility is deliberately not part of tournament discovery.
      */
     public static Specification<Tournament> baseFilters(TournamentGetParams params, EntityManager entityManager) {
         return (Root<Tournament> root, CriteriaQuery<?> query, CriteriaBuilder cb) -> {
@@ -98,18 +97,7 @@ public class TournamentSpecification {
         };
     }
 
-    /**
-     * Public discovery includes enabled tournaments and legacy rows whose
-     * disabled flag has not been initialized.
-     */
-    public static Specification<Tournament> publiclyVisible() {
-        return (root, query, cb) -> cb.or(
-                cb.isFalse(root.get("disabled")),
-                cb.isNull(root.get("disabled"))
-        );
-    }
-
     public static Specification<Tournament> filterBy(TournamentGetParams params, EntityManager entityManager) {
-        return baseFilters(params, entityManager).and(publiclyVisible());
+        return baseFilters(params, entityManager);
     }
 }

@@ -23,7 +23,6 @@ public interface OrganizerInvitationRepository extends JpaRepository<OrganizerIn
     @Query("""
             select o from OrganizerInvitation o
             where o.inviter.id = :inviterId
-              and (o.tournament.disabled = false or o.tournament.disabled is null)
             """)
     Page<OrganizerInvitation> findByInviterId(@Param("inviterId") Long inviterId, Pageable pageable);
 
@@ -31,7 +30,6 @@ public interface OrganizerInvitationRepository extends JpaRepository<OrganizerIn
     @Query("""
             select o from OrganizerInvitation o
             where o.invitee.id = :inviteeId
-              and (o.tournament.disabled = false or o.tournament.disabled is null)
             """)
     Page<OrganizerInvitation> findByInviteeId(@Param("inviteeId") Long inviteeId, Pageable pageable);
 

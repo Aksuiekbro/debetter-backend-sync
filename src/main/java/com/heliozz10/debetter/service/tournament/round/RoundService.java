@@ -82,6 +82,9 @@ public class RoundService {
                 throw new IllegalStateException("A completed " + format + " match must have exactly "
                         + requiredWinnerCount + (requiredWinnerCount == 1 ? " winner." : " winners."));
             }
+            if (winners.stream().anyMatch(team -> Boolean.TRUE.equals(team.getDisqualified()))) {
+                throw new IllegalStateException("Cannot advance a disqualified team. Correct the result or requalify the team first.");
+            }
             return winners.stream();
         }).toList();
     }
@@ -115,7 +118,16 @@ public class RoundService {
             }
 
             throw new IllegalStateException("A completed LD match requires one winning debater.");
+        }).map(winner -> {
+            if (isDisqualified(winner)) {
+                throw new IllegalStateException("Cannot advance a debater from a disqualified team. Correct the result or requalify the team first.");
+            }
+            return winner;
         }).toList();
+    }
+
+    private boolean isDisqualified(TournamentParticipant participant) {
+        return participant.getTeam() != null && Boolean.TRUE.equals(participant.getTeam().getDisqualified());
     }
 
     @Transactional(readOnly = true)
@@ -196,8 +208,8 @@ public class RoundService {
 
     //TODO: automatically assign judges. Done
     /**
-     * Generates matches for a round. This method works with teams already set for the round. Does not check if teams are eligible.
-     * So this method should only be called when teams are already set for the round and are eligible.
+     * Generates matches using the round's entrants, excluding teams disqualified
+     * since the entrants were selected. This also applies to pairing regeneration.
      * <p>
      * Used internally as a method that just generates matches
      * @param round The round to generate matches for
@@ -210,7 +222,7 @@ public class RoundService {
         if (format == DebateFormat.LD) {
             generateMatchesGeneric(
                     round,
-                    new ArrayList<>(round.getDebaters()),
+                    new ArrayList<>(round.getDebaters().stream().filter(debater -> !isDisqualified(debater)).toList()),
                     2,
                     this::loadDebaterHistoryData,
                     this::createDebaterHistoryEntity,
@@ -221,7 +233,8 @@ public class RoundService {
             int groupSize = (format == DebateFormat.BPF) ? 4 : 2;
             generateMatchesGeneric(
                     round,
-                    new ArrayList<>(round.getTeams()),
+                    new ArrayList<>(round.getTeams().stream()
+                            .filter(team -> !Boolean.TRUE.equals(team.getDisqualified())).toList()),
                     groupSize,
                     this::loadTeamHistoryData,
                     this::createTeamHistoryEntity,
@@ -241,6 +254,12 @@ public class RoundService {
             BiConsumer<Match, List<E>> matchSetter,
             Consumer<List<H>> batchSaver
     ) {
+        if (entities.isEmpty()) {
+            throw new IllegalStateException("No eligible entrants remain for this round. Requalify a team or adjust the round entrants before generating pairings.");
+        }
+        if (entities.size() % groupSize != 0) {
+            throw new IllegalStateException("Eligible entrants do not fill complete matches. Requalify a team or adjust the round entrants before generating pairings.");
+        }
         Collections.shuffle(entities);
 
         // Load all histories into memory

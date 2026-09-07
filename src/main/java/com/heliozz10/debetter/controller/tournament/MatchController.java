@@ -17,15 +17,19 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
 
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/tournaments/{tournamentId}/round-groups/{roundGroupId}/rounds/{roundId}/matches")
 public class MatchController {
+    private static final Set<String> PUBLIC_SORT_PROPERTIES = Set.of("id", "startTime", "location", "completed", "isBye");
+
     private final MatchService matchService;
     private final MatchMapper matchMapper;
     private final RoundService roundService;
@@ -40,11 +44,17 @@ public class MatchController {
             Authentication authentication,
             @PageableDefault(page = 0, size = 10) Pageable pageable
     ) {
+        boolean includeExactResults = tournamentSecurity.hasResultEntryPermission(authentication, tournamentId);
+        if (!includeExactResults && pageable.getSort().stream()
+                .anyMatch(order -> !PUBLIC_SORT_PROPERTIES.contains(order.getProperty()))) {
+            throw new AccessDeniedException("Only tournament editors can sort matches by result or private fields");
+        }
         Page<Match> matches = matchService.getVisibleMatchesByRoundId(tournamentId, roundGroupId, roundId, authentication, pageable);
         return new PageableResult<>(
                 matchMapper.toMatchViews(
                         matches.getContent(),
-                        tournamentSecurity.hasResultEntryPermission(authentication, tournamentId)
+                        includeExactResults,
+                        includeExactResults || tournamentSecurity.hasPublishedResults(tournamentId)
                 ),
                 matches.getTotalElements(),
                 matches.getTotalPages()

@@ -40,8 +40,13 @@ public class RoundController {
     ) {
         var round = roundService.getRoundByTournamentIdAndRoundGroupIdAndId(tournamentId, roundGroupId, id);
         RoundView view = roundMapper.toRoundView(round);
-        if (tournamentSecurity.hasResultEntryPermission(authentication, tournamentId)) {
-            view.setMatches(matchMapper.toMatchViews(round.getMatches(), true));
+        boolean includeExactResults = tournamentSecurity.hasResultEntryPermission(authentication, tournamentId);
+        if (includeExactResults || Boolean.TRUE.equals(round.getMatchesArePublic())) {
+            view.setMatches(matchMapper.toMatchViews(
+                    round.getMatches(),
+                    includeExactResults,
+                    includeExactResults || tournamentSecurity.hasPublishedResults(tournamentId)
+            ));
         }
         return view;
     }

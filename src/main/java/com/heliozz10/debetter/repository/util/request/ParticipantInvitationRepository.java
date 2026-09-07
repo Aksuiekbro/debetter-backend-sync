@@ -23,7 +23,6 @@ public interface ParticipantInvitationRepository extends JpaRepository<Participa
     @Query("""
             select p from ParticipantInvitation p
             where p.inviter.id = :inviterId
-              and (p.team.tournament.disabled = false or p.team.tournament.disabled is null)
             """)
     Page<ParticipantInvitation> findVisibleByInviterId(@Param("inviterId") Long inviterId, Pageable pageable);
 
@@ -31,7 +30,6 @@ public interface ParticipantInvitationRepository extends JpaRepository<Participa
     @Query("""
             select p from ParticipantInvitation p
             where p.invitee.id = :inviteeId
-              and (p.team.tournament.disabled = false or p.team.tournament.disabled is null)
             """)
     Page<ParticipantInvitation> findVisibleByInviteeId(@Param("inviteeId") Long inviteeId, Pageable pageable);
 

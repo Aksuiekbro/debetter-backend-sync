@@ -31,6 +31,8 @@ import com.heliozz10.debetter.repository.user.profile.ParticipantProfileReposito
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -95,7 +97,7 @@ class MatchParticipantScoreReadTest {
     private EntityManager entityManager;
 
     @Test
-    void anonymousMatchGetRedactsBpfResultsButPreservesPairingAndCompletionMetadata() throws Exception {
+    void anonymousMatchGetReceivesPublishedBpfOutcomesButNotExactScores() throws Exception {
         TeamFixture fixture = bpfFixture();
 
         mockMvc.perform(get(fixture.endpoint()).servletPath("/api"))
@@ -109,10 +111,10 @@ class MatchParticipantScoreReadTest {
                 .andExpect(jsonPath("$.content[0].team2Score").value(nullValue()))
                 .andExpect(jsonPath("$.content[0].team3Score").value(nullValue()))
                 .andExpect(jsonPath("$.content[0].team4Score").value(nullValue()))
-                .andExpect(jsonPath("$.content[0].team1Won").value(nullValue()))
-                .andExpect(jsonPath("$.content[0].team2Won").value(nullValue()))
-                .andExpect(jsonPath("$.content[0].team3Won").value(nullValue()))
-                .andExpect(jsonPath("$.content[0].team4Won").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].team1Won").value(true))
+                .andExpect(jsonPath("$.content[0].team2Won").value(false))
+                .andExpect(jsonPath("$.content[0].team3Won").value(true))
+                .andExpect(jsonPath("$.content[0].team4Won").value(false))
                 .andExpect(jsonPath("$.content[0].participantScoresComplete").value(true))
                 .andExpect(jsonPath("$.content[0].participantScoresRepairable").value(false))
                 .andExpect(jsonPath("$.content[0].team1ParticipantScores").doesNotExist())
@@ -125,7 +127,7 @@ class MatchParticipantScoreReadTest {
     }
 
     @Test
-    void ordinaryParticipantMatchGetUsesTheSameRedactedBpfResultShape() throws Exception {
+    void ordinaryParticipantMatchGetReceivesPublishedBpfOutcomesButNotExactScores() throws Exception {
         TeamFixture fixture = bpfFixture();
         User participantUser = user("participant-read-" + UUID.randomUUID(), Role.PARTICIPANT);
 
@@ -137,13 +139,56 @@ class MatchParticipantScoreReadTest {
                 .andExpect(jsonPath("$.content[0].team1.id").value(fixture.teams().getFirst().getId()))
                 .andExpect(jsonPath("$.content[0].team1Score").value(nullValue()))
                 .andExpect(jsonPath("$.content[0].team4Score").value(nullValue()))
-                .andExpect(jsonPath("$.content[0].team1Won").value(nullValue()))
-                .andExpect(jsonPath("$.content[0].team4Won").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].team1Won").value(true))
+                .andExpect(jsonPath("$.content[0].team4Won").value(false))
                 .andExpect(jsonPath("$.content[0].participantScoresComplete").value(true))
                 .andExpect(jsonPath("$.content[0].participantScoresRepairable").value(false))
                 .andExpect(jsonPath("$.content[0].team1ParticipantScores").doesNotExist())
                 .andExpect(jsonPath("$.content[0].team4ParticipantScores").doesNotExist())
                 .andExpect(jsonPath("$.content[0].judge.email").doesNotExist());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void publicMatchSortingCannotRevealPrivateScoresContactsOrHiddenWinners(boolean resultsHidden) throws Exception {
+        TeamFixture fixture = bpfFixture();
+        if (resultsHidden) {
+            disableResults(fixture.tournament().getId());
+        }
+        var participantAuth = new UsernamePasswordAuthenticationToken(
+                user("match-sort-viewer-" + UUID.randomUUID(), Role.PARTICIPANT), null, List.of());
+        for (String sort : List.of("team1Score", "debater1.speakerScore", "team1Won", "winnerParticipantId", "judge.phoneNumber", "participantScores.score")) {
+            mockMvc.perform(get(fixture.endpoint()).param("sort", sort + ",desc").servletPath("/api"))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(get(fixture.endpoint()).param("sort", sort + ",desc").servletPath("/api")
+                            .with(authentication(participantAuth)))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(get(fixture.endpoint()).param("sort", "id,asc").servletPath("/api"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+        mockMvc.perform(get(fixture.endpoint()).param("sort", "team1Score,desc").servletPath("/api")
+                        .with(authentication(grantFullAccess(fixture.tournament()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].team1Score").value(141));
+    }
+
+    @Test
+    void anonymousMatchGetWithholdsOutcomesWhenTournamentResultsAreDisabled() throws Exception {
+        TeamFixture fixture = bpfFixture();
+        disableResults(fixture.tournament().getId());
+        entityManager.clear();
+
+        mockMvc.perform(get(fixture.endpoint()).servletPath("/api"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].completed").value(true))
+                .andExpect(jsonPath("$.content[0].team1.id").value(fixture.teams().getFirst().getId()))
+                .andExpect(jsonPath("$.content[0].team1Score").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].team4Score").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].team1Won").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].team4Won").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].team1ParticipantScores").doesNotExist())
+                .andExpect(jsonPath("$.content[0].team4ParticipantScores").doesNotExist());
     }
 
     @Test
@@ -198,14 +243,23 @@ class MatchParticipantScoreReadTest {
                 .andExpect(jsonPath("$.content[0].completed").value(true))
                 .andExpect(jsonPath("$.content[0].debater1.id").value(fixture.debater1().getId()))
                 .andExpect(jsonPath("$.content[0].debater2.id").value(fixture.debater2().getId()))
+                .andExpect(jsonPath("$.content[0].winnerParticipantId").value(fixture.debater1().getId()))
                 .andExpect(jsonPath("$.content[0].debater1Score").doesNotExist())
                 .andExpect(jsonPath("$.content[0].debater2Score").doesNotExist())
                 .andExpect(jsonPath("$.content[0].debater1.speakerScore").doesNotExist())
                 .andExpect(jsonPath("$.content[0].debater2.speakerScore").doesNotExist())
                 .andExpect(jsonPath("$.content[0].debater1.participantProfile").value(nullValue()))
                 .andExpect(jsonPath("$.content[0].debater2.participantProfile").value(nullValue()))
-                .andExpect(jsonPath("$.content[0].debater1.user.firstName").value("Test"))
-                .andExpect(jsonPath("$.content[0].debater2.user.lastName").value("User"))
+                .andExpect(jsonPath("$.content[0].debater1.user.firstName").value("Ada"))
+                .andExpect(jsonPath("$.content[0].debater1.user.lastName").value("Lovelace"))
+                .andExpect(jsonPath("$.content[0].debater2.user.firstName").value("Grace"))
+                .andExpect(jsonPath("$.content[0].debater2.user.lastName").value("Hopper"))
+                .andExpect(jsonPath("$.content[0].debater1.user.id").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].debater1.user.username").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].debater1.user.role").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].debater2.user.id").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].debater2.user.username").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].debater2.user.role").value(nullValue()))
                 .andExpect(jsonPath("$.content[0].judge.fullName").value("LD Judge Privacy"))
                 .andExpect(jsonPath("$.content[0].judge.phoneNumber").doesNotExist())
                 .andExpect(jsonPath("$.content[0].judge.email").doesNotExist())
@@ -215,15 +269,41 @@ class MatchParticipantScoreReadTest {
                         .servletPath("/api")
                         .with(authentication(grantFullAccess(fixture.tournament()))))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].completed").value(true))
+                .andExpect(jsonPath("$.content[0].winnerParticipantId").value(fixture.debater1().getId()))
                 .andExpect(jsonPath("$.content[0].debater1Score").value(80))
                 .andExpect(jsonPath("$.content[0].debater2Score").value(70))
                 .andExpect(jsonPath("$.content[0].debater1.speakerScore").value(17))
                 .andExpect(jsonPath("$.content[0].debater2.speakerScore").value(23))
+                .andExpect(jsonPath("$.content[0].debater1.user.firstName").value("Ada"))
+                .andExpect(jsonPath("$.content[0].debater1.user.lastName").value("Lovelace"))
+                .andExpect(jsonPath("$.content[0].debater2.user.firstName").value("Grace"))
+                .andExpect(jsonPath("$.content[0].debater2.user.lastName").value("Hopper"))
                 .andExpect(jsonPath("$.content[0].debater1.participantProfile.rating").value(901))
                 .andExpect(jsonPath("$.content[0].debater2.participantProfile.rating").value(902))
                 .andExpect(jsonPath("$.content[0].judge.phoneNumber").value("+77020000000"))
                 .andExpect(jsonPath("$.content[0].judge.email").value("ld-judge@example.invalid"))
                 .andExpect(jsonPath("$.content[0].judge.checkedIn").value(true));
+    }
+
+    @Test
+    void anonymousLdReadWithholdsWinnerWhenResultsAreDisabledButKeepsDisplayNames() throws Exception {
+        LdFixture fixture = ldFixture();
+        disableResults(fixture.tournament().getId());
+        entityManager.clear();
+
+        mockMvc.perform(get(fixture.endpoint()).servletPath("/api"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].completed").value(true))
+                .andExpect(jsonPath("$.content[0].winnerParticipantId").doesNotExist())
+                .andExpect(jsonPath("$.content[0].debater1.user.firstName").value("Ada"))
+                .andExpect(jsonPath("$.content[0].debater1.user.lastName").value("Lovelace"))
+                .andExpect(jsonPath("$.content[0].debater2.user.firstName").value("Grace"))
+                .andExpect(jsonPath("$.content[0].debater2.user.lastName").value("Hopper"))
+                .andExpect(jsonPath("$.content[0].debater1Score").doesNotExist())
+                .andExpect(jsonPath("$.content[0].debater2Score").doesNotExist())
+                .andExpect(jsonPath("$.content[0].debater1.participantProfile").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].debater2.participantProfile").value(nullValue()));
     }
 
     @Test
@@ -233,8 +313,75 @@ class MatchParticipantScoreReadTest {
 
         mockMvc.perform(get(roundEndpoint).servletPath("/api"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.matches[0].debater1.user.firstName").value("Test"))
-                .andExpect(jsonPath("$.matches[0].debater2.user.lastName").value("User"));
+                .andExpect(jsonPath("$.matches[0].debater1.user.firstName").value("Ada"))
+                .andExpect(jsonPath("$.matches[0].debater2.user.lastName").value("Hopper"));
+    }
+
+    @Test
+    void authorizedNullResultEntryReturnsDescriptiveBadRequest() throws Exception {
+        TeamFixture fixture = bpfFixture();
+
+        mockMvc.perform(patch(fixture.endpoint() + "/results")
+                        .servletPath("/api")
+                        .with(authentication(grantFullAccess(fixture.tournament())))
+                        .contentType("application/json")
+                        .content("[null]"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid request: must not be null"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void rosterReadsNeverLeakExactScoresToGuestsOrParticipants(boolean resultsHidden) throws Exception {
+        TeamFixture fixture = bpfFixture();
+        for (TournamentParticipant participant : fixture.participants()) {
+            TournamentParticipant managed = tournamentParticipantRepository.getReferenceById(participant.getId());
+            managed.setParticipantProfile(participantProfile("roster-" + UUID.randomUUID(), 0));
+            managed.setSpeakerScore(70);
+        }
+        for (Team team : fixture.teams()) {
+            teamRepository.getReferenceById(team.getId()).setPreliminaryScore(140);
+        }
+        tournamentRepository.getReferenceById(fixture.tournament().getId()).setDisabled(resultsHidden);
+        entityManager.flush();
+        entityManager.clear();
+        String root = "/api/tournaments/" + fixture.tournament().getId();
+        String[] endpoints = {root + "/teams", root + "/teams/" + fixture.teams().getFirst().getId(),
+                root + "/participants", root + "/participants/" + fixture.participants().getFirst().getId()};
+        String[] scores = {"$.content[0].preliminaryScore", "$.preliminaryScore", "$.content[0].speakerScore", "$.speakerScore"};
+        User ordinaryUser = user("roster-viewer-" + UUID.randomUUID(), Role.PARTICIPANT);
+        var participantAuth = new UsernamePasswordAuthenticationToken(ordinaryUser, null, List.of());
+        var organizerAuth = grantFullAccess(fixture.tournament());
+
+        for (int index = 0; index < endpoints.length; index++) {
+            mockMvc.perform(get(endpoints[index]).servletPath("/api"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath(scores[index]).doesNotExist());
+            mockMvc.perform(get(endpoints[index]).servletPath("/api").with(authentication(participantAuth)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath(scores[index]).doesNotExist());
+            mockMvc.perform(get(endpoints[index]).servletPath("/api").with(authentication(organizerAuth)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath(scores[index]).value(index < 2 ? 140 : 70));
+        }
+        mockMvc.perform(get(endpoints[0]).servletPath("/api"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].members[0].speakerScore").doesNotExist());
+        mockMvc.perform(get(endpoints[1]).servletPath("/api"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.members[0].speakerScore").doesNotExist());
+
+        String[] scoreQueries = {root + "/participants?minSpeakerScore=70",
+                root + "/participants?maxSpeakerScore=70", root + "/participants?sort=speakerScore,desc",
+                root + "/teams?sort=preliminaryScore,desc"};
+        for (String endpoint : scoreQueries) {
+            mockMvc.perform(get(endpoint).servletPath("/api"))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(get(endpoint).servletPath("/api").with(authentication(participantAuth)))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(get(endpoint).servletPath("/api").with(authentication(organizerAuth)))
+                    .andExpect(status().isOk());
+        }
     }
 
     @Test
@@ -255,19 +402,6 @@ class MatchParticipantScoreReadTest {
                         .contentType("application/json")
                         .content("[]"))
                 .andExpect(status().isForbidden());
-    }
-
-    @Test
-    void authorizedNullResultEntryReturnsDescriptiveBadRequest() throws Exception {
-        TeamFixture fixture = bpfFixture();
-
-        mockMvc.perform(patch(fixture.endpoint() + "/results")
-                        .servletPath("/api")
-                        .with(authentication(grantFullAccess(fixture.tournament())))
-                        .contentType("application/json")
-                        .content("[null]"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Invalid request: must not be null"));
     }
 
     private TeamFixture bpfFixture() {
@@ -351,11 +485,21 @@ class MatchParticipantScoreReadTest {
 
         TournamentParticipant debater1 = participant(null);
         debater1.setSpeakerScore(17);
-        debater1.setParticipantProfile(participantProfile("ld-debater-1-" + UUID.randomUUID(), 901));
+        debater1.setParticipantProfile(participantProfile(
+                "ld-debater-1-" + UUID.randomUUID(),
+                "Ada",
+                "Lovelace",
+                901
+        ));
         debater1 = tournamentParticipantRepository.save(debater1);
         TournamentParticipant debater2 = participant(null);
         debater2.setSpeakerScore(23);
-        debater2.setParticipantProfile(participantProfile("ld-debater-2-" + UUID.randomUUID(), 902));
+        debater2.setParticipantProfile(participantProfile(
+                "ld-debater-2-" + UUID.randomUUID(),
+                "Grace",
+                "Hopper",
+                902
+        ));
         debater2 = tournamentParticipantRepository.save(debater2);
         Judge judge = judgeRepository.save(judge(tournament, "LD Judge Privacy", "+77020000000", "ld-judge@example.invalid"));
         Match match = new Match();
@@ -365,6 +509,7 @@ class MatchParticipantScoreReadTest {
         match.setJudge(judge);
         match.setDebater1Score(80);
         match.setDebater2Score(70);
+        match.setWinnerParticipantId(debater1.getId());
         match.setCompleted(true);
         match.setIsBye(false);
         matchRepository.saveAndFlush(match);
@@ -391,6 +536,12 @@ class MatchParticipantScoreReadTest {
         return new UsernamePasswordAuthenticationToken(organizer, null, List.of());
     }
 
+    private void disableResults(Long tournamentId) {
+        entityManager.createQuery("update Tournament t set t.disabled = true where t.id = :id")
+                .setParameter("id", tournamentId)
+                .executeUpdate();
+    }
+
     private User user(String username, Role role) {
         return userRepository.saveAndFlush(new User(
                 username,
@@ -403,7 +554,13 @@ class MatchParticipantScoreReadTest {
     }
 
     private ParticipantProfile participantProfile(String username, int rating) {
+        return participantProfile(username, "Test", "User", rating);
+    }
+
+    private ParticipantProfile participantProfile(String username, String firstName, String lastName, int rating) {
         User account = user(username, Role.PARTICIPANT);
+        account.setFirstName(firstName);
+        account.setLastName(lastName);
         ParticipantProfile profile = new ParticipantProfile();
         profile.setUser(account);
         profile.setRating(rating);

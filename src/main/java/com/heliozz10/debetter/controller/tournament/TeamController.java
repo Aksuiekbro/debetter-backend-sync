@@ -10,6 +10,7 @@ import com.heliozz10.debetter.dto.tournament.team.in.TeamUpdateParticipantDto;
 import com.heliozz10.debetter.dto.tournament.team.out.SimpleTeamView;
 import com.heliozz10.debetter.dto.tournament.team.out.TeamView;
 import com.heliozz10.debetter.mapper.tournament.TeamMapper;
+import com.heliozz10.debetter.security.tournament.TournamentSecurity;
 import com.heliozz10.debetter.service.tournament.TeamService;
 import com.heliozz10.debetter.service.tournament.TournamentService;
 import jakarta.validation.Valid;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,16 +33,22 @@ public class TeamController {
     private final TeamMapper teamMapper;
 
     private final TournamentService tournamentService;
+    private final TournamentSecurity tournamentSecurity;
 
     @GetMapping
     @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public PageableResult<TeamView> getTeamsByTournamentId(
             @PathVariable Long tournamentId,
+            Authentication authentication,
             @PageableDefault(page = 0, size = 10) Pageable pageable
     ) {
+        boolean includeExactResults = tournamentSecurity.hasResultEntryPermission(authentication, tournamentId);
+        if (!includeExactResults && pageable.getSort().stream().anyMatch(order -> order.getProperty().endsWith("Score"))) {
+            throw new AccessDeniedException("Only tournament editors can sort teams by exact scores");
+        }
         Page<Team> teams = teamService.getTeamsByTournamentId(tournamentId, pageable);
         return new PageableResult<>(
-                teamService.toTeamViews(teams.getContent()),
+                teams.getContent().stream().map(team -> visibleTeam(team, includeExactResults)).toList(),
                 teams.getTotalElements(),
                 teams.getTotalPages()
         );
@@ -48,8 +56,20 @@ public class TeamController {
 
     @GetMapping("/{id}")
     @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
-    public TeamView getTeamByTournamentIdAndId(@PathVariable Long tournamentId, @PathVariable Long id) {
-        return teamService.toTeamView(teamService.getTeamByTournamentIdAndId(tournamentId, id));
+    public TeamView getTeamByTournamentIdAndId(@PathVariable Long tournamentId, @PathVariable Long id, Authentication authentication) {
+        return visibleTeam(teamService.getTeamByTournamentIdAndId(tournamentId, id),
+                tournamentSecurity.hasResultEntryPermission(authentication, tournamentId));
+    }
+
+    private TeamView visibleTeam(Team team, boolean includeExactResults) {
+        TeamView view = teamService.toTeamView(team);
+        if (!includeExactResults) {
+            view.setPreliminaryScore(null);
+            if (view.getMembers() != null) {
+                view.getMembers().forEach(member -> member.setSpeakerScore(null));
+            }
+        }
+        return view;
     }
 
     @PreAuthorize("principal.role.name() == 'PARTICIPANT' and @tournamentSecurity.canReadTournament(authentication, #tournamentId)")
