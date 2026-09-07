@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8081:8080"
+    volumes:
+      - uploads-data:/var/www/debetter/uploads
     environment:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://db:5432/debetter}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-debetter_user}
@@ -44,3 +46,4 @@ services:
 volumes:
   db-data:
   redis-data:
+  uploads-data:

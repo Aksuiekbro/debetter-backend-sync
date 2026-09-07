@@ -29,6 +29,7 @@ public class FeedbackController {
     private final FeedbackMapper feedbackMapper;
 
     @GetMapping
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public PageableResult<FeedbackView> getFeedbacks(
             @PathVariable Long tournamentId,
             @Valid @ModelAttribute FeedbackGetParams params,
@@ -43,11 +44,12 @@ public class FeedbackController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public FeedbackView getFeedbackById(@PathVariable Long tournamentId, @PathVariable Long id) {
         return feedbackService.toFeedbackView(feedbackService.getFeedbackByTournamentIdAndId(tournamentId, id));
     }
 
-    @PreAuthorize("principal.role.name() == 'PARTICIPANT' and @tournamentSecurity.hasViewPermission(principal, #tournamentId)")
+    @PreAuthorize("principal.role.name() == 'PARTICIPANT' and @tournamentSecurity.hasViewPermission(principal, #tournamentId) and @tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     @PostMapping
     public FeedbackView addFeedback(@PathVariable Long tournamentId, @Validated({OnCreate.class, Default.class}) @RequestBody FeedbackDto dto, Authentication authentication) {
         User user = (User) authentication.getPrincipal();
@@ -55,17 +57,17 @@ public class FeedbackController {
         return feedbackService.toFeedbackView(feedbackService.addFeedbackToTournament(dto, tournamentId, profile.getId()));
     }
 
-    @PreAuthorize("principal.role.name() == 'PARTICIPANT' and @tournamentSecurity.hasViewPermission(principal, #tournamentId)")
+    @PreAuthorize("principal.role.name() == 'PARTICIPANT' and @tournamentSecurity.hasViewPermission(principal, #tournamentId) and @tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     @PatchMapping("/{id}")
-    public FeedbackView updateFeedback(Authentication authentication, @PathVariable Long id, @Valid @RequestBody FeedbackDto dto) {
+    public FeedbackView updateFeedback(Authentication authentication, @PathVariable Long tournamentId, @PathVariable Long id, @Valid @RequestBody FeedbackDto dto) {
         User user = (User) authentication.getPrincipal();
         ParticipantProfile profile = (ParticipantProfile) user.getProfile();
         return feedbackService.toFeedbackView(feedbackService.updateFeedback(dto, id, profile.getId()));
     }
 
-    @PreAuthorize("principal.role.name() == 'PARTICIPANT'")
+    @PreAuthorize("principal.role.name() == 'PARTICIPANT' and @tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     @DeleteMapping("/{id}")
-    public void deleteFeedback(Authentication authentication, @PathVariable Long id) {
+    public void deleteFeedback(Authentication authentication, @PathVariable Long tournamentId, @PathVariable Long id) {
         User user = (User) authentication.getPrincipal();
         ParticipantProfile profile = (ParticipantProfile) user.getProfile();
         feedbackService.deleteFeedback(id, profile.getId());

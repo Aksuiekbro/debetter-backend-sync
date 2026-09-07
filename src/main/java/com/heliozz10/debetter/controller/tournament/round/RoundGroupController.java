@@ -21,6 +21,7 @@ public class RoundGroupController {
     private final RoundGroupMapper roundGroupMapper;
 
     @GetMapping
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public List<RoundGroupView> getRoundGroupsByTournamentId(@PathVariable Long tournamentId) {
         return roundGroupMapper.toRoundGroupViews(roundGroupService.getRoundGroupsByTournamentId(tournamentId));
     }

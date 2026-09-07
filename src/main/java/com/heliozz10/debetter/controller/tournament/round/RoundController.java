@@ -25,11 +25,13 @@ public class RoundController {
     private final TournamentSecurity tournamentSecurity;
 
     @GetMapping
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public List<SimpleRoundView> getRoundsByRoundGroupId(@PathVariable Long tournamentId, @PathVariable Long roundGroupId) {
         return roundMapper.toSimpleRoundViews(roundService.getRoundsByTournamentIdAndRoundGroupId(tournamentId, roundGroupId));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public RoundView getRoundById(
             @PathVariable Long tournamentId,
             @PathVariable Long roundGroupId,
@@ -38,8 +40,13 @@ public class RoundController {
     ) {
         var round = roundService.getRoundByTournamentIdAndRoundGroupIdAndId(tournamentId, roundGroupId, id);
         RoundView view = roundMapper.toRoundView(round);
-        if (tournamentSecurity.hasResultEntryPermission(authentication, tournamentId)) {
-            view.setMatches(matchMapper.toMatchViews(round.getMatches(), true));
+        boolean includeExactResults = tournamentSecurity.hasResultEntryPermission(authentication, tournamentId);
+        if (includeExactResults || Boolean.TRUE.equals(round.getMatchesArePublic())) {
+            view.setMatches(matchMapper.toMatchViews(
+                    round.getMatches(),
+                    includeExactResults,
+                    includeExactResults || tournamentSecurity.hasPublishedResults(tournamentId)
+            ));
         }
         return view;
     }

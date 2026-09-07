@@ -31,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 @RequiredArgsConstructor
 @Service
@@ -85,11 +86,15 @@ public class AnnouncementService {
         }
 
         if(image != null) {
-            Url url = fileService.uploadFile(image, "announcements", tournament.getId().toString());
+            Url url = fileService.uploadImage(image, "announcements", uniqueImageKey(tournament.getId()));
             announcement.setImageUrl(url);
         }
 
         return announcementRepository.save(announcement);
+    }
+
+    private String uniqueImageKey(Long tournamentId) {
+        return tournamentId + "-" + UUID.randomUUID();
     }
 
     /**
@@ -120,10 +125,9 @@ public class AnnouncementService {
         }
 
         if(image != null) {
-            if(announcement.getImageUrl() != null) {
-                fileService.deleteFile(announcement.getImageUrl());
-            }
-            Url url = fileService.uploadFile(image, "announcements", tournamentId.toString());
+            Url previousImage = announcement.getImageUrl();
+            Url url = fileService.uploadImage(image, "announcements", uniqueImageKey(tournamentId));
+            fileService.deletePhysicalFileAfterCommit(previousImage);
             announcement.setImageUrl(url);
         }
 
@@ -181,11 +185,12 @@ public class AnnouncementService {
     }
 
     @Transactional
-    public void removeAnnouncementFromTournament(Long announcementId, Long tournamentId) {
+    public void removeAnnouncementFromTournament(Long tournamentId, Long announcementId) {
         Announcement announcement = announcementRepository.findByTournamentIdAndId(tournamentId, announcementId)
                 .orElseThrow(() -> new EntityNotFoundException("Announcement not found"));
 
-        announcementRepository.deleteById(announcementId);
+        fileService.deletePhysicalFileAfterCommit(announcement.getImageUrl());
+        announcementRepository.delete(announcement);
     }
 
     public AnnouncementView toAnnouncementView(Announcement announcement) {

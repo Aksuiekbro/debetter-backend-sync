@@ -15,7 +15,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TournamentSpecification {
-    public static Specification<Tournament> filterBy(TournamentGetParams params, EntityManager entityManager) {
+    /**
+     * Filters shared by public discovery and principal-scoped tournament queries.
+     * Result visibility is deliberately not part of tournament discovery.
+     */
+    public static Specification<Tournament> baseFilters(TournamentGetParams params, EntityManager entityManager) {
         return (Root<Tournament> root, CriteriaQuery<?> query, CriteriaBuilder cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -91,5 +95,9 @@ public class TournamentSpecification {
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    public static Specification<Tournament> filterBy(TournamentGetParams params, EntityManager entityManager) {
+        return baseFilters(params, entityManager);
     }
 }

@@ -20,9 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -158,7 +158,7 @@ public class RoundGroupService {
         );
 
         List<Team> topTeams = teamRepository.findByTournamentAndDisqualifiedFalse(tournament).stream()
-                .sorted(Comparator.comparing(Team::getPreliminaryScore, Comparator.nullsFirst(Comparator.naturalOrder())).reversed())
+                .sorted(preliminaryTeamRanking(tournament))
                 .limit(teamEntrants)
                 .toList();
 
@@ -238,6 +238,36 @@ public class RoundGroupService {
                 .flatMap(round -> Optional.ofNullable(round.getMatches()).orElse(List.of()).stream())
                 .filter(match -> !Boolean.TRUE.equals(match.getIsBye()))
                 .toList();
+    }
+
+    private Comparator<Team> preliminaryTeamRanking(Tournament tournament) {
+        RoundGroup preliminaryGroup = tournament.getRoundGroups().stream()
+                .filter(roundGroup -> roundGroup.getType() == RoundGroupType.PRELIMINARY)
+                .findFirst()
+                .orElseThrow(() -> new EntityNotFoundException("Preliminary round group not found"));
+        Map<Long, Long> winsByTeamId = preliminaryMatches(preliminaryGroup).stream()
+                .filter(MatchParticipantScorePolicy::isTeamFormat)
+                .flatMap(this::explicitWinningTeams)
+                .map(Team::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.groupingBy(teamId -> teamId, Collectors.counting()));
+
+        return Comparator
+                .comparingLong((Team team) -> winsByTeamId.getOrDefault(team.getId(), 0L)).reversed()
+                .thenComparing(
+                        Team::getPreliminaryScore,
+                        Comparator.nullsLast(Comparator.reverseOrder())
+                )
+                .thenComparing(Team::getId, Comparator.nullsLast(Comparator.naturalOrder()));
+    }
+
+    private Stream<Team> explicitWinningTeams(Match match) {
+        return Stream.of(
+                Boolean.TRUE.equals(match.getTeam1Won()) ? match.getTeam1() : null,
+                Boolean.TRUE.equals(match.getTeam2Won()) ? match.getTeam2() : null,
+                Boolean.TRUE.equals(match.getTeam3Won()) ? match.getTeam3() : null,
+                Boolean.TRUE.equals(match.getTeam4Won()) ? match.getTeam4() : null
+        ).filter(Objects::nonNull);
     }
 
     private boolean hasMissingParticipantScores(Match match) {

@@ -21,11 +21,13 @@ public class ScheduleController {
     private final ScheduleMapper scheduleMapper;
 
     @GetMapping
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public List<ScheduleView> getSchedulesByTournamentId(@PathVariable Long tournamentId) {
         return scheduleMapper.toScheduleViews(scheduleService.getSchedulesByTournamentId(tournamentId));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public ScheduleView getScheduleByTournamentIdAndId(@PathVariable Long tournamentId, @PathVariable Long id) {
         return scheduleMapper.toScheduleView(scheduleService.getScheduleByTournamentIdAndId(tournamentId, id));
     }

@@ -32,6 +32,7 @@ public class MatchController {
     private final TournamentSecurity tournamentSecurity;
 
     @GetMapping
+    @PreAuthorize("@tournamentSecurity.canReadTournament(authentication, #tournamentId)")
     public PageableResult<MatchView> getMatchesByRoundId(
             @PathVariable Long tournamentId,
             @PathVariable Long roundGroupId,
@@ -40,10 +41,12 @@ public class MatchController {
             @PageableDefault(page = 0, size = 10) Pageable pageable
     ) {
         Page<Match> matches = matchService.getVisibleMatchesByRoundId(tournamentId, roundGroupId, roundId, authentication, pageable);
+        boolean includeExactResults = tournamentSecurity.hasResultEntryPermission(authentication, tournamentId);
         return new PageableResult<>(
                 matchMapper.toMatchViews(
                         matches.getContent(),
-                        tournamentSecurity.hasResultEntryPermission(authentication, tournamentId)
+                        includeExactResults,
+                        includeExactResults || tournamentSecurity.hasPublishedResults(tournamentId)
                 ),
                 matches.getTotalElements(),
                 matches.getTotalPages()

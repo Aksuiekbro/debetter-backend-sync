@@ -10,9 +10,11 @@ import org.mapstruct.Mapping;
 import java.util.List;
 
 @Mapper(componentModel = "spring", uses = {
-        ParticipantProfileMapper.class
+        ParticipantProfileMapper.class,
+        TournamentMapper.class
 })
 public interface ParticipantInvitationMapper {
+    @Mapping(source = "team.tournament", target = "tournament")
     ParticipantInvitationView toParticipantInvitationView(ParticipantInvitation participantInvitation);
 
     List<ParticipantInvitationView> toParticipantInvitationViews(List<ParticipantInvitation> participantInvitations);

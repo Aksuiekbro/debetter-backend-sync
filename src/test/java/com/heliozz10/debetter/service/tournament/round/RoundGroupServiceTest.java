@@ -121,6 +121,105 @@ class RoundGroupServiceTest {
     }
 
     @Test
+    void teamQualificationRanksWinsBeforePointsAndUsesTeamIdForStableTies() {
+        Tournament tournament = new Tournament();
+        tournament.setId(53L);
+        tournament.setStarted(true);
+
+        Team highWinsLowPoints = team(504L, 604L, 100);
+        Team pointsTieBreaker = team(501L, 601L, 250);
+        Team stableLowerId = team(502L, 602L, 200);
+        Team stableHigherId = team(503L, 603L, 200);
+        Team highPointsNoWins = team(500L, 600L, 1000);
+        List<Team> eligibleTeams = List.of(
+                highPointsNoWins,
+                stableHigherId,
+                highWinsLowPoints,
+                stableLowerId,
+                pointsTieBreaker
+        );
+        tournament.setTeams(eligibleTeams);
+
+        RoundGroup preliminary = group(101L, tournament, RoundGroupType.PRELIMINARY, 1);
+        Round currentRound = round(201L, preliminary, 1);
+        List<Match> matches = List.of(
+                completedPreliminaryMatch(highWinsLowPoints, highPointsNoWins),
+                completedPreliminaryMatch(highWinsLowPoints, highPointsNoWins),
+                completedPreliminaryMatch(pointsTieBreaker, highPointsNoWins),
+                completedPreliminaryMatch(stableLowerId, highPointsNoWins),
+                completedPreliminaryMatch(stableHigherId, highPointsNoWins)
+        );
+        matches.forEach(match -> match.setRound(currentRound));
+        currentRound.setMatches(matches);
+        preliminary.setRounds(List.of(currentRound));
+
+        RoundGroup teamElimination = group(102L, tournament, RoundGroupType.TEAM_ELIMINATION, null);
+        teamElimination.setFormat(DebateFormat.BPF);
+        Round teamFirstRound = round(202L, teamElimination, 1);
+        teamElimination.setRounds(List.of(teamFirstRound));
+        tournament.setRoundGroups(List.of(preliminary, teamElimination));
+
+        when(roundGroupRepository.findFullByTournamentIdAndId(53L, 101L)).thenReturn(Optional.of(preliminary));
+        when(roundRepository.findWithTeamsByRoundGroup_IdAndRoundNumber(101L, 1)).thenReturn(Optional.of(currentRound));
+        when(roundRepository.areAllMatchesCompleted(currentRound)).thenReturn(true);
+        when(roundRepository.findByRoundGroup_IdAndRoundNumber(102L, 1)).thenReturn(Optional.of(teamFirstRound));
+        when(teamRepository.findByTournamentAndDisqualifiedFalse(tournament)).thenReturn(eligibleTeams);
+
+        new RoundGroupService(roundGroupRepository, roundService, roundRepository, teamRepository)
+                .proceedToNextRound(53L, 101L);
+
+        verify(roundService).setTeams(teamFirstRound, List.of(
+                highWinsLowPoints,
+                pointsTieBreaker,
+                stableLowerId,
+                stableHigherId
+        ));
+    }
+
+    @Test
+    void bpfQualificationCountsBothExplicitWinners() {
+        Tournament tournament = new Tournament();
+        tournament.setId(53L);
+        tournament.setStarted(true);
+
+        Team firstWinner = team(501L, 601L, 10);
+        Team highScoringLoser = team(502L, 602L, 1000);
+        Team secondWinner = team(503L, 603L, 20);
+        Team otherLoser = team(504L, 604L, 900);
+        Team reserve = team(505L, 605L, 800);
+        List<Team> eligibleTeams = List.of(reserve, otherLoser, highScoringLoser, firstWinner, secondWinner);
+        tournament.setTeams(eligibleTeams);
+
+        RoundGroup preliminary = group(101L, tournament, RoundGroupType.PRELIMINARY, 1);
+        preliminary.setFormat(DebateFormat.BPF);
+        Round currentRound = round(201L, preliminary, 1);
+        Match match = completedPreliminaryMatch(firstWinner, highScoringLoser, secondWinner, otherLoser);
+        match.setRound(currentRound);
+        currentRound.setMatches(List.of(match));
+        preliminary.setRounds(List.of(currentRound));
+
+        RoundGroup teamElimination = group(102L, tournament, RoundGroupType.TEAM_ELIMINATION, null);
+        teamElimination.setFormat(DebateFormat.BPF);
+        Round teamFirstRound = round(202L, teamElimination, 1);
+        teamElimination.setRounds(List.of(teamFirstRound));
+        tournament.setRoundGroups(List.of(preliminary, teamElimination));
+
+        when(roundGroupRepository.findFullByTournamentIdAndId(53L, 101L)).thenReturn(Optional.of(preliminary));
+        when(roundRepository.findWithTeamsByRoundGroup_IdAndRoundNumber(101L, 1)).thenReturn(Optional.of(currentRound));
+        when(roundRepository.areAllMatchesCompleted(currentRound)).thenReturn(true);
+        when(roundRepository.findByRoundGroup_IdAndRoundNumber(102L, 1)).thenReturn(Optional.of(teamFirstRound));
+        when(teamRepository.findByTournamentAndDisqualifiedFalse(tournament)).thenReturn(eligibleTeams);
+
+        new RoundGroupService(roundGroupRepository, roundService, roundRepository, teamRepository)
+                .proceedToNextRound(53L, 101L);
+
+        verify(roundService).setTeams(
+                teamFirstRound,
+                List.of(secondWinner, firstWinner, highScoringLoser, otherLoser)
+        );
+    }
+
+    @Test
     void bpfEliminationProgressionAdvancesFourWinnersIntoTheFinal() {
         Tournament tournament = new Tournament();
         tournament.setId(53L);

@@ -93,4 +93,18 @@ public class TournamentSecurity {
 
         return user.getRole() == Role.ORGANIZER && hasEditPermission(user, tournamentId);
     }
+
+    public boolean canReadTournament(Authentication authentication, Long tournamentId) {
+        return true;
+    }
+
+    /**
+     * A disabled tournament remains readable. The setting only controls
+     * whether non-organizers receive completed match outcomes.
+     */
+    public boolean hasPublishedResults(Long tournamentId) {
+        return tournamentRepository.findById(tournamentId)
+                .map(tournament -> !Boolean.TRUE.equals(tournament.getDisabled()))
+                .orElse(false);
+    }
 }
