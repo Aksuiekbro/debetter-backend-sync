@@ -11,18 +11,17 @@ import com.heliozz10.debetter.repository.user.profile.OrganizerProfileRepository
 import com.heliozz10.debetter.repository.util.request.OrganizerInvitationRepository;
 import com.heliozz10.debetter.service.tournament.TournamentService;
 import jakarta.persistence.EntityManager;
-import org.springframework.security.access.AccessDeniedException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -79,19 +78,31 @@ class OrganizerInvitationServiceTest {
     }
 
     @Test
-    void hiddenTournamentInvitationCannotBeAccepted() {
+    void resultsHiddenTournamentInvitationCanBeAccepted() {
         OrganizerInvitation invitation = invitation(91L, 23L, 47L);
         invitation.getTournament().setDisabled(true);
         when(organizerInvitationRepository.findByInviteeIdAndId(23L, 91L))
                 .thenReturn(Optional.of(invitation));
 
-        assertThrows(
-                AccessDeniedException.class,
-                () -> organizerInvitationService.acceptInvitation(91L, 23L)
-        );
+        organizerInvitationService.acceptInvitation(91L, 23L);
 
-        assertEquals(OrganizerInvitationStatus.PENDING, invitation.getStatus());
-        verify(tournamentService, never()).addOrganizerToTournament(23L, 47L);
+        assertEquals(OrganizerInvitationStatus.ACCEPTED, invitation.getStatus());
+        verify(tournamentService).addOrganizerToTournament(23L, 47L);
+    }
+
+    @Test
+    void resultsHiddenTournamentDeclinedInvitationCanBeReopened() {
+        OrganizerInvitation invitation = invitation(91L, 23L, 47L);
+        invitation.getTournament().setDisabled(true);
+        invitation.setAccepted(null);
+        when(organizerInvitationRepository.findExistingInvitation(17L, "invitee", 47L))
+                .thenReturn(Optional.of(invitation));
+        when(organizerInvitationRepository.save(invitation)).thenReturn(invitation);
+
+        OrganizerInvitation reopened = organizerInvitationService.createInvitation(17L, "invitee", 47L);
+
+        assertEquals(OrganizerInvitationStatus.PENDING, reopened.getStatus());
+        verify(organizerInvitationRepository).save(invitation);
     }
 
     @Test
@@ -124,23 +135,6 @@ class OrganizerInvitationServiceTest {
         assertEquals(OrganizerInvitationStatus.PENDING, reopened.getStatus());
         assertTrue(reopened.getTimestamp().isAfter(declinedAt));
         verify(organizerInvitationRepository).save(declined);
-    }
-
-    @Test
-    void hiddenTournamentDeclinedInvitationCannotBeReopened() {
-        OrganizerInvitation declined = invitation(91L, 23L, 47L);
-        declined.setAccepted(null);
-        declined.getTournament().setDisabled(true);
-        when(organizerInvitationRepository.findExistingInvitation(17L, "invitee", 47L))
-                .thenReturn(Optional.of(declined));
-
-        assertThrows(
-                AccessDeniedException.class,
-                () -> organizerInvitationService.createInvitation(17L, "invitee", 47L)
-        );
-
-        assertEquals(OrganizerInvitationStatus.DECLINED, declined.getStatus());
-        verify(organizerInvitationRepository, never()).save(declined);
     }
 
     @Test

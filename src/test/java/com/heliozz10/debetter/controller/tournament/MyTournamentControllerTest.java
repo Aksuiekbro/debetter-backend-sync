@@ -53,7 +53,7 @@ class MyTournamentControllerTest {
     private UserTournamentRoleRepository userTournamentRoleRepository;
 
     @Test
-    void returnsOnlyPrincipalMembershipsWithRoleAwareHiddenVisibility() throws Exception {
+    void returnsAllPrincipalMembershipsRegardlessOfResultVisibility() throws Exception {
         User principal = saveUser("member");
         User anotherUser = saveUser("other-member");
 
@@ -74,16 +74,16 @@ class MyTournamentControllerTest {
                         .param("sort", "name,asc")
                         .with(authentication(authenticationFor(principal))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(5))
+                .andExpect(jsonPath("$.totalElements").value(6))
                 .andExpect(jsonPath("$.totalPages").value(1))
                 .andExpect(jsonPath("$.content[*].name").value(contains(
                         "Edit hidden",
                         "Edit visible",
                         "Full hidden",
                         "Full visible",
+                        "View hidden",
                         "View visible"
                 )))
-                .andExpect(jsonPath("$.content[*].name", not(hasItem("View hidden"))))
                 .andExpect(jsonPath("$.content[*].name", not(hasItem("Unrelated"))))
                 .andExpect(jsonPath("$.content[*].name", not(hasItem("Pending invitation"))));
     }

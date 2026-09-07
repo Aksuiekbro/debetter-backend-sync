@@ -40,7 +40,7 @@ class OrganizerInvitationVisibilityPersistenceTest {
     private OrganizerInvitationRepository organizerInvitationRepository;
 
     @Test
-    void sentAndReceivedPagesExcludeDisabledTournamentInvitations() {
+    void sentAndReceivedPagesIncludeInvitationsWhenOnlyResultsAreHidden() {
         OrganizerProfile inviter = organizer("inviter");
         OrganizerProfile invitee = organizer("invitee");
         Tournament visibleTournament = tournamentRepository.saveAndFlush(tournament(inviter, false));
@@ -48,17 +48,20 @@ class OrganizerInvitationVisibilityPersistenceTest {
         OrganizerInvitation visibleInvitation = organizerInvitationRepository.saveAndFlush(
                 invitation(inviter, invitee, visibleTournament)
         );
-        organizerInvitationRepository.saveAndFlush(invitation(inviter, invitee, hiddenTournament));
+        OrganizerInvitation hiddenResultsInvitation = organizerInvitationRepository.saveAndFlush(
+                invitation(inviter, invitee, hiddenTournament)
+        );
 
         var sentPage = organizerInvitationRepository.findByInviterId(inviter.getId(), PageRequest.of(0, 10));
         var receivedPage = organizerInvitationRepository.findByInviteeId(invitee.getId(), PageRequest.of(0, 10));
         List<Long> sentIds = sentPage.map(OrganizerInvitation::getId).getContent();
         List<Long> receivedIds = receivedPage.map(OrganizerInvitation::getId).getContent();
 
-        assertEquals(List.of(visibleInvitation.getId()), sentIds);
-        assertEquals(List.of(visibleInvitation.getId()), receivedIds);
-        assertEquals(1, sentPage.getTotalElements());
-        assertEquals(1, receivedPage.getTotalElements());
+        List<Long> expectedIds = List.of(visibleInvitation.getId(), hiddenResultsInvitation.getId()).stream().sorted().toList();
+        assertEquals(expectedIds, sentIds.stream().sorted().toList());
+        assertEquals(expectedIds, receivedIds.stream().sorted().toList());
+        assertEquals(2, sentPage.getTotalElements());
+        assertEquals(2, receivedPage.getTotalElements());
     }
 
     private OrganizerProfile organizer(String prefix) {

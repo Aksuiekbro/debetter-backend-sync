@@ -116,7 +116,7 @@ class ParticipantInvitationControllerContractTest {
     }
 
     @Test
-    void hiddenTournamentInvitationsAreExcludedFromSentAndReceivedPages() throws Exception {
+    void resultsHiddenTournamentInvitationsRemainInSentAndReceivedPages() throws Exception {
         InvitationFixture fixture = invitationFixture();
         fixture.tournament().setDisabled(true);
         tournamentRepository.saveAndFlush(fixture.tournament());
@@ -125,19 +125,19 @@ class ParticipantInvitationControllerContractTest {
                         .servletPath("/api")
                         .with(authentication(authenticationFor(fixture.inviterUser()))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").isEmpty())
-                .andExpect(jsonPath("$.totalElements").value(0));
+                .andExpect(jsonPath("$.content[0].id").value(fixture.invitation().getId()))
+                .andExpect(jsonPath("$.totalElements").value(1));
 
         mockMvc.perform(get("/api/participant-invitations/received")
                         .servletPath("/api")
                         .with(authentication(authenticationFor(fixture.inviteeUser()))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").isEmpty())
-                .andExpect(jsonPath("$.totalElements").value(0));
+                .andExpect(jsonPath("$.content[0].id").value(fixture.invitation().getId()))
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 
     @Test
-    void hiddenTournamentParticipantInvitationCannotBeCreated() throws Exception {
+    void resultsHiddenTournamentParticipantInvitationCanBeCreated() throws Exception {
         InvitationFixture fixture = invitationFixture();
         fixture.tournament().setDisabled(true);
         tournamentRepository.saveAndFlush(fixture.tournament());
@@ -153,9 +153,9 @@ class ParticipantInvitationControllerContractTest {
                                 fixture.invitation().getTeam().getId()
                         ))
                         .with(authentication(authenticationFor(fixture.inviterUser()))))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
 
-        assertEquals(invitationCount, participantInvitationRepository.count());
+        assertEquals(invitationCount + 1, participantInvitationRepository.count());
     }
 
     @Test
@@ -225,7 +225,7 @@ class ParticipantInvitationControllerContractTest {
     }
 
     @Test
-    void hiddenTournamentInvitationCannotBeAccepted() throws Exception {
+    void resultsHiddenTournamentInvitationCanBeAccepted() throws Exception {
         InvitationFixture fixture = invitationFixture();
         fixture.tournament().setDisabled(true);
         tournamentRepository.saveAndFlush(fixture.tournament());
@@ -233,17 +233,17 @@ class ParticipantInvitationControllerContractTest {
         mockMvc.perform(post("/api/participant-invitations/{id}/accept", fixture.invitation().getId())
                         .servletPath("/api")
                         .with(authentication(authenticationFor(fixture.inviteeUser()))))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
 
-        assertFalse(participantInvitationRepository.findById(fixture.invitation().getId()).orElseThrow().getAccepted());
-        assertFalse(tournamentParticipantRepository.existsByTeam_Tournament_IdAndParticipantProfile_Id(
+        assertTrue(participantInvitationRepository.findById(fixture.invitation().getId()).orElseThrow().getAccepted());
+        assertTrue(tournamentParticipantRepository.existsByTeam_Tournament_IdAndParticipantProfile_Id(
                 fixture.tournament().getId(),
                 fixture.inviteeProfile().getId()
         ));
         assertTrue(userTournamentRoleRepository.findRolesByUserIdAndTournamentId(
                 fixture.inviteeUser().getId(),
                 fixture.tournament().getId()
-        ).isEmpty());
+        ).contains(TournamentRole.VIEW));
     }
 
     @Test
@@ -285,6 +285,7 @@ class ParticipantInvitationControllerContractTest {
         inviterMember.setParticipantProfile(inviter.profile());
         inviterMember.setSpeakerScore(0);
         tournamentParticipantRepository.saveAndFlush(inviterMember);
+        team.getMembers().add(inviterMember);
 
         ParticipantInvitation invitation = new ParticipantInvitation();
         invitation.setInviter(inviter.profile());

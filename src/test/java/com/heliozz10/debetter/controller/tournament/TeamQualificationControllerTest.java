@@ -4,6 +4,10 @@ import com.heliozz10.debetter.content.tournament.DebateFormat;
 import com.heliozz10.debetter.content.tournament.Tournament;
 import com.heliozz10.debetter.content.tournament.TournamentLeague;
 import com.heliozz10.debetter.content.tournament.team.Team;
+import com.heliozz10.debetter.content.tournament.match.Match;
+import com.heliozz10.debetter.content.tournament.round.Round;
+import com.heliozz10.debetter.content.tournament.round.RoundGroup;
+import com.heliozz10.debetter.content.tournament.round.RoundGroupType;
 import com.heliozz10.debetter.content.user.Role;
 import com.heliozz10.debetter.content.user.User;
 import com.heliozz10.debetter.content.user.role.TournamentRole;
@@ -11,9 +15,14 @@ import com.heliozz10.debetter.content.user.role.UserTournamentKey;
 import com.heliozz10.debetter.content.user.role.UserTournamentRole;
 import com.heliozz10.debetter.repository.tournament.TournamentRepository;
 import com.heliozz10.debetter.repository.tournament.team.TeamRepository;
+import com.heliozz10.debetter.repository.tournament.match.MatchRepository;
+import com.heliozz10.debetter.repository.tournament.round.RoundRepository;
+import com.heliozz10.debetter.repository.tournament.round.RoundGroupRepository;
 import com.heliozz10.debetter.repository.user.UserRepository;
 import com.heliozz10.debetter.repository.user.UserTournamentRoleRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -28,11 +37,14 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -61,6 +73,50 @@ class TeamQualificationControllerTest {
 
     @Autowired
     private UserTournamentRoleRepository userTournamentRoleRepository;
+
+    @Autowired
+    private MatchRepository matchRepository;
+
+    @Autowired
+    private RoundRepository roundRepository;
+
+    @Autowired
+    private RoundGroupRepository roundGroupRepository;
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void failedRegenerationPreservesOriginalMatchesAndPublicationAfterDisqualification(boolean excludeEveryTeam) throws Exception {
+        Tournament tournament = tournamentRepository.saveAndFlush(tournament());
+        var organizer = organizerWithRole(tournament, TournamentRole.EDIT);
+        List<Team> teams = new ArrayList<>();
+        for (int index = 0; index < 4; index++) {
+            teams.add(teamRepository.saveAndFlush(team(tournament, excludeEveryTeam || index == 3)));
+        }
+        RoundGroup group = roundGroupRepository.saveAndFlush(new RoundGroup(tournament, RoundGroupType.PRELIMINARY, DebateFormat.APF));
+        Round round = new Round(group, "Round with disqualified entrants", 1);
+        round.setTeams(teams);
+        round.setMatchesArePublic(true);
+        round.setMatches(new ArrayList<>());
+        Match original = new Match();
+        original.setRound(round);
+        original.setTeam1(teams.get(0));
+        original.setTeam2(teams.get(1));
+        original.setCompleted(false);
+        original.setIsBye(false);
+        round.getMatches().add(original);
+        round = roundRepository.saveAndFlush(round);
+
+        mockMvc.perform(patch("/api/tournaments/{tournamentId}/round-groups/{groupId}/rounds/{roundId}/matches/randomize",
+                        tournament.getId(), group.getId(), round.getId())
+                        .servletPath("/api")
+                        .with(authentication(organizer)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString(excludeEveryTeam ? "No eligible entrants" : "complete matches")));
+
+        assertTrue(matchRepository.existsById(original.getId()));
+        assertEquals(1, matchRepository.findByRoundId(round.getId()).size());
+        assertTrue(roundRepository.findById(round.getId()).orElseThrow().getMatchesArePublic());
+    }
 
     @Test
     void organizerWithEditPermissionCanDisqualifyTeam() throws Exception {

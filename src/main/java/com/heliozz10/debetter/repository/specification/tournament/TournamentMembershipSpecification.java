@@ -20,11 +20,6 @@ public final class TournamentMembershipSpecification {
             TournamentRole.FULL
     );
 
-    private static final List<TournamentRole> HIDDEN_TOURNAMENT_ROLES = List.of(
-            TournamentRole.EDIT,
-            TournamentRole.FULL
-    );
-
     private TournamentMembershipSpecification() {
     }
 
@@ -35,17 +30,8 @@ public final class TournamentMembershipSpecification {
             Join<Tournament, UserTournamentRole> membership = root.join("tournamentRoles", JoinType.INNER);
             Predicate belongsToUser = cb.equal(membership.get("user").get("id"), userId);
             Predicate isAcceptedMembership = membership.get("role").in(ACCEPTED_ROLES);
-            Predicate isPubliclyVisible = cb.or(
-                    cb.isFalse(root.get("disabled")),
-                    cb.isNull(root.get("disabled"))
-            );
-            Predicate canManageHiddenTournament = membership.get("role").in(HIDDEN_TOURNAMENT_ROLES);
 
-            return cb.and(
-                    belongsToUser,
-                    isAcceptedMembership,
-                    cb.or(isPubliclyVisible, canManageHiddenTournament)
-            );
+            return cb.and(belongsToUser, isAcceptedMembership);
         };
     }
 }

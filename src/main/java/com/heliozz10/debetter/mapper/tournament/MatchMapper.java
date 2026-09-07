@@ -1,5 +1,6 @@
 package com.heliozz10.debetter.mapper.tournament;
 
+import com.heliozz10.debetter.content.tournament.DebateFormat;
 import com.heliozz10.debetter.content.tournament.match.Match;
 import com.heliozz10.debetter.content.tournament.match.MatchParticipantScore;
 import com.heliozz10.debetter.dto.tournament.match.in.MatchResultDto;
@@ -68,6 +69,18 @@ public interface MatchMapper {
     }
 
     default MatchView toMatchView(Match match, boolean includeExactResults) {
+        return toMatchView(match, includeExactResults, includeExactResults);
+    }
+
+    /**
+     * Non-organizers may receive published winners and completion state, but
+     * never the underlying scores or participant score breakdown.
+     */
+    default MatchView toMatchView(
+            Match match,
+            boolean includeExactResults,
+            boolean includePublishedOutcomes
+    ) {
         MatchView view = toMappedMatchView(match);
         if (view == null) {
             return null;
@@ -87,29 +100,57 @@ public interface MatchMapper {
             view.setTeam3ParticipantScores(participantScoresForTeam(match.getTeam3(), match.getParticipantScores()));
             view.setTeam4ParticipantScores(participantScoresForTeam(match.getTeam4(), match.getParticipantScores()));
         } else {
-            redactPrivateResults(view);
+            if (includePublishedOutcomes
+                    && MatchParticipantScorePolicy.isPreliminaryMatch(match)
+                    && MatchParticipantScorePolicy.resolveFormat(match) == DebateFormat.LD) {
+                view.setWinnerParticipantId(publishedPreliminaryLdWinner(match));
+            }
+            redactExactResults(view);
+            if (!includePublishedOutcomes) {
+                redactPublishedOutcomes(view);
+            }
         }
         return view;
     }
 
+    private Long publishedPreliminaryLdWinner(Match match) {
+        // Preliminary LD persists speaker points, while elimination persists a winner ID.
+        // Derive only the published outcome; do not change the entity or the editor's ballot.
+        if (!Boolean.TRUE.equals(match.getCompleted())
+                || match.getDebater1() == null || match.getDebater2() == null
+                || match.getDebater1().getId() == null || match.getDebater2().getId() == null
+                || Objects.equals(match.getDebater1().getId(), match.getDebater2().getId())
+                || match.getDebater1Score() == null || match.getDebater2Score() == null
+                || match.getDebater1Score() < 0 || match.getDebater2Score() < 0
+                || Objects.equals(match.getDebater1Score(), match.getDebater2Score())) {
+            return null;
+        }
+        return match.getDebater1Score() > match.getDebater2Score()
+                ? match.getDebater1().getId()
+                : match.getDebater2().getId();
+    }
+
     default List<MatchView> toMatchViews(List<Match> matches, boolean includeExactResults) {
+        return toMatchViews(matches, includeExactResults, includeExactResults);
+    }
+
+    default List<MatchView> toMatchViews(
+            List<Match> matches,
+            boolean includeExactResults,
+            boolean includePublishedOutcomes
+    ) {
         return matches == null ? List.of() : matches.stream()
-                .map(match -> toMatchView(match, includeExactResults))
+                .map(match -> toMatchView(match, includeExactResults, includePublishedOutcomes))
                 .toList();
     }
 
-    private void redactPrivateResults(MatchView view) {
+    private void redactExactResults(MatchView view) {
         view.setTeam1Score(null);
         view.setTeam2Score(null);
         view.setTeam3Score(null);
         view.setTeam4Score(null);
-        view.setTeam1Won(null);
-        view.setTeam2Won(null);
-        view.setTeam3Won(null);
-        view.setTeam4Won(null);
         view.setDebater1Score(null);
         view.setDebater2Score(null);
-        view.setWinnerParticipantId(null);
         view.setTeam1ParticipantScores(null);
         view.setTeam2ParticipantScores(null);
         view.setTeam3ParticipantScores(null);
@@ -117,6 +158,14 @@ public interface MatchMapper {
         redactParticipant(view.getDebater1());
         redactParticipant(view.getDebater2());
         redactJudge(view.getJudge());
+    }
+
+    private void redactPublishedOutcomes(MatchView view) {
+        view.setTeam1Won(null);
+        view.setTeam2Won(null);
+        view.setTeam3Won(null);
+        view.setTeam4Won(null);
+        view.setWinnerParticipantId(null);
     }
 
     private void redactParticipant(SimpleTournamentParticipantView participant) {

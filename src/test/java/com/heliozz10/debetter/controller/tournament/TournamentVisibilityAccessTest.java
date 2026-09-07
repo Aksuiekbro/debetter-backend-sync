@@ -20,26 +20,20 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -66,7 +60,7 @@ class TournamentVisibilityAccessTest {
     private EntityManager entityManager;
 
     @Test
-    void publicListOmitsHiddenRowsBeforePaginationAndKeepsLegacyNullRowsVisible() throws Exception {
+    void publicListIncludesResultHiddenRowsBeforePaginationAndKeepsLegacyNullRowsVisible() throws Exception {
         tournamentRepository.saveAndFlush(tournament("A Hidden Cup", true));
         tournamentRepository.saveAndFlush(tournament("B Visible Cup", false));
         tournamentRepository.saveAndFlush(tournament("C Legacy Cup", null));
@@ -74,62 +68,66 @@ class TournamentVisibilityAccessTest {
 
         mockMvc.perform(discoveryRequest(0))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(2))
-                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(3))
                 .andExpect(jsonPath("$.content.length()").value(1))
-                .andExpect(jsonPath("$.content[0].name").value("B Visible Cup"));
+                .andExpect(jsonPath("$.content[0].name").value("A Hidden Cup"));
 
         mockMvc.perform(discoveryRequest(1))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(2))
-                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(3))
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].name").value("B Visible Cup"));
+
+        mockMvc.perform(discoveryRequest(2))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].name").value("C Legacy Cup"));
     }
 
-    @ParameterizedTest(name = "hidden route {0} rejects guests and VIEW members")
-    @MethodSource("hiddenTournamentReadPaths")
-    void hiddenTournamentAndNestedReadsRejectGuestAndView(String pathTemplate) throws Exception {
-        Tournament hidden = tournamentRepository.saveAndFlush(tournament("Hidden Route Cup", true));
-        UsernamePasswordAuthenticationToken viewer = grant(hidden, TournamentRole.VIEW, Role.PARTICIPANT);
-        String path = pathTemplate.formatted(hidden.getId());
+    @ParameterizedTest(name = "result-hidden route {0} remains public")
+    @MethodSource("resultHiddenTournamentReadPaths")
+    void resultHiddenTournamentAndNestedReadsRemainReachable(String pathTemplate) throws Exception {
+        Tournament resultHidden = tournamentRepository.saveAndFlush(tournament("Result Hidden Route Cup", true));
+        UsernamePasswordAuthenticationToken viewer = grant(resultHidden, TournamentRole.VIEW, Role.PARTICIPANT);
+        String path = pathTemplate.formatted(resultHidden.getId());
 
         mockMvc.perform(get(path).servletPath("/api"))
-                .andExpect(status().isForbidden())
-                .andExpect(content().string(not(containsString("Hidden Route Cup"))));
+                .andExpect(status().isOk());
 
         mockMvc.perform(get(path)
                         .servletPath("/api")
                         .with(authentication(viewer)))
-                .andExpect(status().isForbidden())
-                .andExpect(content().string(not(containsString("Hidden Route Cup"))));
+                .andExpect(status().isOk());
     }
 
     @ParameterizedTest
     @EnumSource(value = TournamentRole.class, names = {"EDIT", "FULL"})
-    void editAndFullMembersCanReadHiddenTournament(TournamentRole role) throws Exception {
-        Tournament hidden = tournamentRepository.saveAndFlush(tournament("Organizer Hidden Cup", true));
+    void editAndFullMembersCanReadResultHiddenTournament(TournamentRole role) throws Exception {
+        Tournament hidden = tournamentRepository.saveAndFlush(tournament("Organizer Result Hidden Cup", true));
 
         mockMvc.perform(get("/api/tournaments/{id}", hidden.getId())
                         .servletPath("/api")
                         .with(authentication(grant(hidden, role, Role.ORGANIZER))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Organizer Hidden Cup"));
+                .andExpect(jsonPath("$.name").value("Organizer Result Hidden Cup"));
     }
 
     @Test
-    void unrelatedOrganizerCannotReadHiddenTournament() throws Exception {
-        Tournament hidden = tournamentRepository.saveAndFlush(tournament("Private Organizer Cup", true));
+    void unrelatedOrganizerCanReadResultHiddenTournament() throws Exception {
+        Tournament hidden = tournamentRepository.saveAndFlush(tournament("Public Result Hidden Cup", true));
         User unrelatedOrganizer = userRepository.saveAndFlush(user(Role.ORGANIZER));
 
         mockMvc.perform(get("/api/tournaments/{id}", hidden.getId())
                         .servletPath("/api")
                         .with(authentication(tokenFor(unrelatedOrganizer))))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Public Result Hidden Cup"));
     }
 
     @Test
-    void onlyFullMemberCanToggleVisibilityAndReenabledTournamentIsPublicAgain() throws Exception {
+    void onlyFullMemberCanToggleResultVisibilityAndTournamentStaysPublic() throws Exception {
         Tournament tournament = tournamentRepository.saveAndFlush(tournament("Toggle Cup", false));
         UsernamePasswordAuthenticationToken editor = grant(tournament, TournamentRole.EDIT, Role.ORGANIZER);
         UsernamePasswordAuthenticationToken owner = grant(tournament, TournamentRole.FULL, Role.ORGANIZER);
@@ -146,7 +144,8 @@ class TournamentVisibilityAccessTest {
         entityManager.clear();
 
         mockMvc.perform(get("/api/tournaments/{id}", tournament.getId()).servletPath("/api"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.disabled").value(true));
         mockMvc.perform(get("/api/tournaments/{id}", tournament.getId())
                         .servletPath("/api")
                         .with(authentication(owner)))
@@ -163,30 +162,8 @@ class TournamentVisibilityAccessTest {
                 .andExpect(jsonPath("$.disabled").value(false));
     }
 
-    @ParameterizedTest(name = "VIEW member cannot mutate hidden tournament via {0}")
-    @MethodSource("hiddenTournamentMutationRequests")
-    void viewMemberCannotMutateHiddenTournament(MutationRequest mutation) throws Exception {
-        Tournament hidden = tournamentRepository.saveAndFlush(tournament("Hidden Mutation Cup", true));
-        UsernamePasswordAuthenticationToken viewer = grant(hidden, TournamentRole.VIEW, Role.PARTICIPANT);
-
-        mockMvc.perform(mutationRequest(mutation, hidden.getId())
-                        .servletPath("/api")
-                        .with(authentication(viewer)))
-                .andExpect(status().isForbidden());
-    }
-
-    @ParameterizedTest(name = "guest cannot mutate hidden tournament via {0}")
-    @MethodSource("hiddenTournamentMutationRequests")
-    void guestCannotMutateHiddenTournament(MutationRequest mutation) throws Exception {
-        Tournament hidden = tournamentRepository.saveAndFlush(tournament("Hidden Guest Mutation Cup", true));
-
-        mockMvc.perform(mutationRequest(mutation, hidden.getId())
-                        .servletPath("/api"))
-                .andExpect(status().isForbidden());
-    }
-
     @Test
-    void editOrganizerCanStillUpdateHiddenTournament() throws Exception {
+    void editOrganizerCanStillUpdateResultHiddenTournament() throws Exception {
         Tournament hidden = tournamentRepository.saveAndFlush(tournament("Hidden Editable Cup", true));
         UsernamePasswordAuthenticationToken editor = grant(hidden, TournamentRole.EDIT, Role.ORGANIZER);
         MockMultipartFile data = new MockMultipartFile(
@@ -274,89 +251,18 @@ class TournamentVisibilityAccessTest {
         return tournament;
     }
 
-    private static Stream<String> hiddenTournamentReadPaths() {
+    private static Stream<String> resultHiddenTournamentReadPaths() {
         return Stream.of(
                 "/api/tournaments/%d",
-                "/api/tournaments/%d/main-organizer",
                 "/api/tournaments/%d/organizers",
                 "/api/tournaments/%d/participants",
-                "/api/tournaments/%d/participants/999999",
                 "/api/tournaments/%d/teams",
-                "/api/tournaments/%d/teams/999999",
                 "/api/tournaments/%d/announcements",
-                "/api/tournaments/%d/announcements/999999",
-                "/api/tournaments/%d/announcements/999999/comments",
                 "/api/tournaments/%d/schedules",
-                "/api/tournaments/%d/schedules/999999",
-                "/api/tournaments/%d/map",
                 "/api/tournaments/%d/judges",
-                "/api/tournaments/%d/judges/999999",
                 "/api/tournaments/%d/feedbacks",
-                "/api/tournaments/%d/feedbacks/999999",
-                "/api/tournaments/%d/round-groups",
-                "/api/tournaments/%d/round-groups/999999/rounds",
-                "/api/tournaments/%d/round-groups/999999/rounds/999999",
-                "/api/tournaments/%d/round-groups/999999/rounds/999999/matches"
+                "/api/tournaments/%d/round-groups"
         );
     }
 
-    private static Stream<MutationRequest> hiddenTournamentMutationRequests() {
-        return Stream.of(
-                new MutationRequest(
-                        "POST",
-                        "/api/tournaments/%d/teams",
-                        "{\"name\":\"Hidden Team\",\"club\":\"Hidden Club\",\"creatorId\":1}"
-                ),
-                new MutationRequest(
-                        "PATCH",
-                        "/api/tournaments/%d/teams/999999/participant-update",
-                        "{\"name\":\"Hidden Team\",\"club\":\"Hidden Club\"}"
-                ),
-                new MutationRequest(
-                        "POST",
-                        "/api/tournaments/%d/feedbacks",
-                        "{\"title\":\"Hidden Feedback\",\"content\":\"Hidden content\"}"
-                ),
-                new MutationRequest(
-                        "PATCH",
-                        "/api/tournaments/%d/feedbacks/999999",
-                        "{\"title\":\"Hidden Feedback\",\"content\":\"Hidden content\"}"
-                ),
-                new MutationRequest(
-                        "DELETE",
-                        "/api/tournaments/%d/feedbacks/999999",
-                        ""
-                ),
-                new MutationRequest(
-                        "POST",
-                        "/api/tournaments/%d/announcements/999999/comments",
-                        "{\"content\":\"Hidden comment\"}"
-                ),
-                new MutationRequest(
-                        "DELETE",
-                        "/api/tournaments/%d/announcements/999999/comments/999999",
-                        ""
-                )
-        );
-    }
-
-    private static MockHttpServletRequestBuilder mutationRequest(MutationRequest mutation, Long tournamentId) {
-        MockHttpServletRequestBuilder request = switch (mutation.method()) {
-            case "POST" -> post(mutation.path().formatted(tournamentId));
-            case "PATCH" -> patch(mutation.path().formatted(tournamentId));
-            case "DELETE" -> delete(mutation.path().formatted(tournamentId));
-            default -> throw new IllegalArgumentException("Unsupported method: " + mutation.method());
-        };
-        if (!mutation.body().isEmpty()) {
-            request.contentType(MediaType.APPLICATION_JSON).content(mutation.body());
-        }
-        return request;
-    }
-
-    private record MutationRequest(String method, String path, String body) {
-        @Override
-        public String toString() {
-            return method + " " + path;
-        }
-    }
 }
