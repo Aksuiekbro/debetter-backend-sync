@@ -4,6 +4,7 @@ import com.heliozz10.debetter.content.News;
 import com.heliozz10.debetter.content.user.Role;
 import com.heliozz10.debetter.content.user.User;
 import com.heliozz10.debetter.content.util.media.Url;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -24,7 +25,20 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     @Override
     Page<User> findAll(Specification<User> spec, Pageable pageable);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :id")
+    Optional<User> findForUpdateById(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.username = :username")
+    Optional<User> findForUpdateByUsername(@Param("username") String username);
+
+    @Query("select u.username from User u where u.id = :id")
+    Optional<String> findCurrentUsernameById(@Param("id") Long id);
+
     Optional<User> findByUsername(String username);
+    boolean existsByUsernameAndIdNot(String username, Long id);
+    boolean existsByEmailAndIdNot(String email, Long id);
 
     @EntityGraph(value = "User.forSecurity", type = EntityGraph.EntityGraphType.LOAD)
     Optional<User> findForSecurityByUsername(String username);

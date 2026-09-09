@@ -15,3 +15,5 @@ databaseChangeLog:
       file: db/changelog/create_tournament_map.sql
   - include:
       file: db/changelog/add_news_image_order.sql
+  - include:
+      file: db/changelog/create_persistent_logins.sql

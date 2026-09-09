@@ -11,6 +11,9 @@ import com.heliozz10.debetter.dto.util.socials.in.SocialProfileDto;
 import com.heliozz10.debetter.dto.util.socials.in.SocialProfilesDto;
 import com.heliozz10.debetter.mapper.user.UserMapper;
 import com.heliozz10.debetter.service.user.UserService;
+import com.heliozz10.debetter.security.AccountSessionService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
@@ -32,6 +35,7 @@ import java.util.List;
 public class UserController {
     private final UserService userService;
     private final UserMapper userMapper;
+    private final AccountSessionService accountSessionService;
 
     @GetMapping
     public PageableResult<SimpleUserView> getUsers(
@@ -60,8 +64,11 @@ public class UserController {
 
     @PreAuthorize("@userSecurity.canEditUser(principal, #id)")
     @PatchMapping("/{id}")
-    public UserView updateUser(@PathVariable Long id, @Valid @RequestBody UserUpdateDto user) {
-        return userMapper.toUserView(userService.updateUser(user, id));
+    public UserView updateUser(@PathVariable Long id, @Valid @RequestBody UserUpdateDto user,
+                               Authentication authentication, HttpServletRequest request, HttpServletResponse response) {
+        User updated = userService.updateUser(user, id);
+        accountSessionService.refreshSelf(updated, authentication, request, response);
+        return userMapper.toUserView(updated);
     }
 
     @PreAuthorize("@userSecurity.canEditUser(principal, #id)")

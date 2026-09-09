@@ -101,6 +101,13 @@ public class GlobalExceptionHandler {
 //    ) {
 //        return buildError(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", request);
 //    }
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<Map<String, String>> handleAuthentication(AuthenticationException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                "message", "Invalid username or password"
+        ));
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, String>> handleDataIntegrity(DataIntegrityViolationException ex) {
         // Services throw this exception directly (no cause) with a user-facing message.

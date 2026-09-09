@@ -22,7 +22,7 @@ public interface UserMapper {
     User toUser(UserRegistrationDto dto);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    @Mapping(target = "username", ignore = true)
+    @Mapping(target = "password", ignore = true)
     void updateUser(UserUpdateDto dto, @MappingTarget User user);
 
     SimpleUserView toSimpleUserView(User user);

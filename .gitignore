@@ -54,3 +54,8 @@ build/
 /src/main/resources/application.yml
 /debetter-app.tar
 .DS_Store
+
+# Local account verification evidence; retain reviewed design and handoff docs.
+.ai/runs/
+.ai/scratch/
+.ai/transcripts/
