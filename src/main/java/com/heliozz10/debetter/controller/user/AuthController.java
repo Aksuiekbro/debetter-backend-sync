@@ -3,6 +3,7 @@ package com.heliozz10.debetter.controller.user;
 import com.heliozz10.debetter.dto.user.in.UserLoginDto;
 import com.heliozz10.debetter.dto.user.in.UserRegistrationDto;
 import com.heliozz10.debetter.security.AuthProvider;
+import com.heliozz10.debetter.security.JsonRememberMeServices;
 import com.heliozz10.debetter.service.user.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -55,7 +56,7 @@ public class AuthController {
 
     @CacheEvict("currentUser")
     @PostMapping("/login")
-    public void login(@RequestBody UserLoginDto dto, HttpServletRequest request, HttpServletResponse response) {
+    public void login(@Valid @RequestBody UserLoginDto dto, HttpServletRequest request, HttpServletResponse response) {
         UsernamePasswordAuthenticationToken authToken = UsernamePasswordAuthenticationToken.unauthenticated(dto.username(), dto.password());
         Authentication auth = authProvider.authenticate(authToken);
 
@@ -67,6 +68,7 @@ public class AuthController {
         securityContextRepository.saveContext(context, request, response);
 
         if(dto.rememberMe()) {
+            request.setAttribute(JsonRememberMeServices.JSON_OPT_IN_ATTRIBUTE, Boolean.TRUE);
             rememberMeServices.loginSuccess(request, response, auth);
         }
     }

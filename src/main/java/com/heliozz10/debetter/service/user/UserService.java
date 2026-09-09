@@ -32,11 +32,13 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
@@ -61,6 +63,7 @@ public class UserService implements UserDetailsService {
     private final FileService fileService;
 
     private final PasswordEncoder passwordEncoder;
+    private final PersistentTokenRepository persistentTokenRepository;
 
     @Transactional(readOnly = true)
     public Page<User> getUsers(UserGetParams params, Pageable pageable) {
@@ -80,6 +83,7 @@ public class UserService implements UserDetailsService {
         }
 
         User user = userMapper.toUser(dto);
+        user.setAuthorities(new ArrayList<>());
         user.setPassword(passwordEncoder.encode(dto.password()));
         user.setCreatedAt(LocalDateTime.now());
         user = userRepository.save(user);
@@ -94,10 +98,24 @@ public class UserService implements UserDetailsService {
     @CacheEvict(value = "currentUser", key = "#userId")
     @Transactional
     public User updateUser(UserUpdateDto dto, Long userId) {
-        User user = userRepository.findById(userId).orElseThrow(() -> new EntityNotFoundException("User not found"));
-        updateParticipantProfile(dto, user);
+        User user = userRepository.findForUpdateById(userId).orElseThrow(() -> new EntityNotFoundException("User not found"));
+        if (dto.username() != null && userRepository.existsByUsernameAndIdNot(dto.username(), userId)) {
+            throw new DataIntegrityViolationException("That username is already taken.");
+        }
+        if (dto.email() != null && userRepository.existsByEmailAndIdNot(dto.email(), userId)) {
+            throw new DataIntegrityViolationException("That email is already taken.");
+        }
+        String oldUsername = user.getUsername();
         updatePassword(dto, user);
+        updateParticipantProfile(dto, user);
         userMapper.updateUser(dto, user);
+        if (!oldUsername.equals(user.getUsername())) {
+            // The JDBC repository joins the JPA transaction through the shared DataSource.
+            // No released username may retain tokens that could resolve to a future account.
+            persistentTokenRepository.removeUserTokens(oldUsername);
+            user.setUsernameLastEditedAt(LocalDateTime.now());
+        }
+        userRepository.flush(); // surface database uniqueness conflicts before refreshing the session
         return user;
     }
 
@@ -115,8 +133,8 @@ public class UserService implements UserDetailsService {
     }
 
     private void updatePassword(UserUpdateDto dto, User user) {
-        boolean hasOldPassword = hasText(dto.oldPassword());
-        boolean hasNewPassword = hasText(dto.newPassword());
+        boolean hasOldPassword = dto.oldPassword() != null;
+        boolean hasNewPassword = dto.newPassword() != null;
         if (!hasOldPassword && !hasNewPassword) {
             return;
         }

@@ -23,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository;
 
 import java.util.Optional;
 
@@ -66,6 +67,9 @@ class UserServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private PersistentTokenRepository persistentTokenRepository;
+
     private UserService userService;
 
     @BeforeEach
@@ -80,7 +84,8 @@ class UserServiceTest {
                 institutionRepository,
                 commonService,
                 fileService,
-                passwordEncoder
+                passwordEncoder,
+                persistentTokenRepository
         );
     }
 
@@ -121,7 +126,7 @@ class UserServiceTest {
                 null,
                 null
         );
-        when(userRepository.findById(42L)).thenReturn(Optional.of(user));
+        when(userRepository.findForUpdateById(42L)).thenReturn(Optional.of(user));
 
         User updated = userService.updateUser(dto, 42L);
 
@@ -143,7 +148,7 @@ class UserServiceTest {
                 null,
                 null
         );
-        when(userRepository.findById(42L)).thenReturn(Optional.of(user));
+        when(userRepository.findForUpdateById(42L)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrong-password", "encoded-old-password")).thenReturn(false);
 
         IllegalArgumentException exception = assertThrows(

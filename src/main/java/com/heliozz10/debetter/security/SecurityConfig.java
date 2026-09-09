@@ -1,8 +1,9 @@
 package com.heliozz10.debetter.security;
 
 import com.heliozz10.debetter.service.user.UserService;
+import com.heliozz10.debetter.repository.user.UserRepository;
+import org.springframework.transaction.PlatformTransactionManager;
 import javax.sql.DataSource;
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -12,23 +13,22 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.authentication.RememberMeServices;
 import org.springframework.security.web.authentication.rememberme.JdbcTokenRepositoryImpl;
-import org.springframework.security.web.authentication.rememberme.PersistentTokenBasedRememberMeServices;
 import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository;
-import org.springframework.security.web.authentication.rememberme.TokenBasedRememberMeServices;
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
-@RequiredArgsConstructor
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
-    private final AuthProvider authProvider;
-    private final UserService userService;
-    private final Environment environment;
-
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, RememberMeServices rememberMeServices) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, RememberMeServices rememberMeServices,
+                                           AuthProvider authProvider, UserService userService,
+                                           Environment environment) throws Exception {
+        String servletPath = environment.getProperty("spring.mvc.servlet.path", "");
+        var logoutRequest = PathPatternRequestMatcher.withDefaults()
+                .basePath("/".equals(servletPath) ? "" : servletPath)
+                .matcher(HttpMethod.POST, "/auth/logout");
         return http
                 .authenticationProvider(authProvider)
                 .authorizeHttpRequests(httpRequests -> httpRequests
@@ -37,13 +37,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated())
                 .formLogin(AbstractHttpConfigurer::disable)
-                .logout(logout -> logout.logoutUrl("/auth/logout"))
+                .logout(logout -> logout.logoutRequestMatcher(logoutRequest)
+                        .logoutSuccessHandler((request, response, authentication) -> response.setStatus(200)))
                 .rememberMe(rememberMe -> rememberMe
+                        .key(environment.getRequiredProperty("security.remember-me.key"))
                         .rememberMeServices(rememberMeServices))
-//                        .userDetailsService(userService)
-//                        .key(environment.getProperty("security.remember-me.key"))
-//                        .rememberMeParameter("remember-me")
-//                        .tokenValiditySeconds(60 * 60 * 24 * 30))
                 .userDetailsService(userService)
                 .csrf(csrf -> csrf
 //                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
@@ -57,18 +55,21 @@ public class SecurityConfig {
     public RememberMeServices rememberMeServices(
             UserDetailsService userDetailsService,
             PersistentTokenRepository tokenRepository,
-            Environment environment
+            Environment environment,
+            UserRepository users,
+            PlatformTransactionManager transactionManager
     ) {
-        PersistentTokenBasedRememberMeServices services =
-                new PersistentTokenBasedRememberMeServices(
-                        environment.getProperty("security.remember-me.key"),
+        JsonRememberMeServices services =
+                new JsonRememberMeServices(
+                        environment.getRequiredProperty("security.remember-me.key"),
                         userDetailsService,
-                        tokenRepository
+                        tokenRepository,
+                        users,
+                        transactionManager
                 );
 
-        services.setParameter("remember-me");
         services.setTokenValiditySeconds(60 * 60 * 24 * 30); // 30 days
-        services.setAlwaysRemember(false); // only if checkbox checked
+        services.setAlwaysRemember(false); // only explicit JSON opt-in
 
         return services;
     }
@@ -79,7 +80,7 @@ public class SecurityConfig {
         JdbcTokenRepositoryImpl repo = new JdbcTokenRepositoryImpl();
         repo.setDataSource(dataSource);
 
-        // repo.setCreateTableOnStartup(true);
+        // The Liquibase migration owns persistent_logins; preserve existing tokens at startup.
 
         return repo;
     }
